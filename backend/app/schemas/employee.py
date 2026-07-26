@@ -38,3 +38,10 @@ class EmployeeResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class EmployeeListResponse(BaseModel):
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    employees: list[EmployeeResponse]
