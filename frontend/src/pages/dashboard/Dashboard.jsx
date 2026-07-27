@@ -9,15 +9,7 @@ function Dashboard() {
   return (
     <div style={{ display: "flex" }}>
       <Sidebar />
-
-      <div
-        style={{
-          flex: 1,
-          background: "#f3f4f6",
-          minHeight: "100vh",
-          padding: "20px",
-        }}
-      >
+      <div style={{ flex: 1, background: "#f3f4f6", minHeight: "100vh", padding: "20px" }}>
         <TopNavbar />
         <DashboardCards />
         <Charts />
