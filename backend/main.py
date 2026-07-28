@@ -30,7 +30,34 @@ from app.routes import dashboard
 
 app = FastAPI(
     title="Orvexa AI Business OS",
-    version="1.0.0"
+    description="""
+AI-powered Business Management System
+
+Features:
+- Authentication
+- Employee Management
+- Inventory Management
+- Sales
+- Purchases
+- Customers
+- Suppliers
+- Attendance
+- Leave Management
+- Payroll
+- Reports
+- Analytics
+- AI Insights
+- Notifications
+- Audit Logs
+""",
+    version="1.0.0",
+    contact={
+        "name": "Naga Gopi Rangisetti",
+        "email": "your-email@example.com"
+    },
+    license_info={
+        "name": "MIT"
+    }
 )
 Base.metadata.create_all(bind=engine)
 app.include_router(auth_router)

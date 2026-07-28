@@ -18,7 +18,6 @@ router = APIRouter(
     tags=["Attendance"]
 )
 
-
 @router.post(
     "/check-in",
     response_model=AttendanceResponse,

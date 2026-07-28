@@ -12,8 +12,8 @@ from app.schemas.leave import (
 )
 
 router = APIRouter(
-    prefix="/leave",
-    tags=["Leave Management"]
+    prefix="/leaves",
+    tags=["Leaves"]
 )
 
 

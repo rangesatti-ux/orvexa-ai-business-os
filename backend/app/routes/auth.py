@@ -12,7 +12,10 @@ from app.utils.security import (
 )
 from app.dependencies.auth import get_current_user
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+router = APIRouter(
+    prefix="/auth",
+    tags=["Authentication"]
+)
 
 
 @router.post("/register")

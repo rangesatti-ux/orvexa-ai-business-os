@@ -21,7 +21,11 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=EmployeeResponse)
+@router.post(
+    "/",
+    summary="Create Employee",
+    description="Creates a new employee and stores the employee information in the database."
+)
 def create_employee(
     employee: EmployeeCreate,
     db: Session = Depends(get_db),
@@ -55,14 +59,18 @@ def create_employee(
 
     create_audit_log(
     db=db,
-    username=current_user.username,
+    username=current_user.email,
     module="Employee",
-    action=f"Created employee {employee.name}"
+    action=f"Created employee {employee.full_name}"
 )
 
     return new_employee
 
-@router.get("/", response_model=EmployeeListResponse)
+@router.get(
+    "/",
+    summary="Get Employees",
+    description="Returns a list of all employees."
+)
 def get_employees(
     search: str | None = Query(default=None),
     department: str | None = Query(default=None),
@@ -129,7 +137,11 @@ def get_employee(
 
     return employee
 
-@router.put("/{employee_id}", response_model=EmployeeResponse)
+@router.put(
+    "/{employee_id}",
+    summary="Update Employee",
+    description="Updates an existing employee using the employee ID."
+)
 def update_employee(
     employee_id: int,
     employee_data: EmployeeCreate,
@@ -158,7 +170,11 @@ def update_employee(
 
     return employee
 
-@router.delete("/{employee_id}")
+@router.delete(
+    "/{employee_id}",
+    summary="Delete Employee",
+    description="Deletes an employee from the database."
+)
 def delete_employee(
     employee_id: int,
     db: Session = Depends(get_db),

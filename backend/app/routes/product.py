@@ -16,7 +16,7 @@ from app.services.notification_service import create_notification
 
 router = APIRouter(
     prefix="/products",
-    tags=["Products"]
+    tags=["Inventory"]
 )
 
 @router.post(
