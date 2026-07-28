@@ -7,6 +7,7 @@ from app.database.connection import get_db
 from app.dependencies.auth import get_current_user
 from app.models.employee import Employee
 from app.models.user import User
+from app.services.audit_service import create_audit_log
 from app.schemas.employee import (
     EmployeeCreate,
     EmployeeUpdate,
@@ -51,6 +52,13 @@ def create_employee(
     db.add(new_employee)
     db.commit()
     db.refresh(new_employee)
+
+    create_audit_log(
+    db=db,
+    username=current_user.username,
+    module="Employee",
+    action=f"Created employee {employee.name}"
+)
 
     return new_employee
 

@@ -12,6 +12,7 @@ from app.schemas.product import (
     ProductListResponse
 )
 from app.dependencies.role import require_role
+from app.services.notification_service import create_notification
 
 router = APIRouter(
     prefix="/products",
@@ -40,6 +41,13 @@ def create_product(product: ProductCreate, db: Session = Depends(get_db)):
     db.add(new_product)
     db.commit()
     db.refresh(new_product)
+
+    create_notification(
+    db=db,
+    title="New Product Added",
+    message=f"{product.product_name} was added to inventory.",
+    module="Inventory"
+)
 
     return new_product
 
@@ -134,7 +142,17 @@ def update_product(
     db.commit()
     db.refresh(existing_product)
 
+    if product.quantity < 10:
+        create_notification(
+            db=db,
+            title="Low Stock Alert",
+            message=f"{product.product_name} has only {product.quantity} items remaining.",
+            module="Inventory"
+    )
+    
     return existing_product
+
+
 
 @router.delete(
     "/{product_id}",

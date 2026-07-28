@@ -25,3 +25,8 @@ class Product(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     sale_items = relationship("SaleItem", back_populates="product")
+
+    purchase_items = relationship(
+    "PurchaseItem",
+    back_populates="product"
+)
