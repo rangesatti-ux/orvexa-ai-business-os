@@ -51,6 +51,10 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Tests
-      env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/orvexa
-      run: pytest
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/orvexa_db
+          SECRET_KEY: ReplaceThisWithALongRandomSecretKey123456789
+          ALGORITHM: HS256
+          ACCESS_TOKEN_EXPIRE_MINUTES: 60
+        run: |
+          pytest
