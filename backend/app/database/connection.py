@@ -18,7 +18,10 @@ from app.models.payroll import Payroll
 from app.models.audit_log import AuditLog
 from app.models.notification import Notification
 
-load_dotenv()
+import os
+
+if not os.getenv("GITHUB_ACTIONS"):
+    load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
