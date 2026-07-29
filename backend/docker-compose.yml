@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+
+    container_name: orvexa-db
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Orvexa@123
+      POSTGRES_DB: orvexa_db
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: .
+
+    container_name: orvexa-backend
+
+    depends_on:
+      - postgres
+
+    env_file:
+      - .env
+
+    ports:
+      - "8000:8000"
+
+volumes:
+  postgres_data:
