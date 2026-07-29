@@ -4,63 +4,80 @@ function EmployeesTable({
   editEmployee,
 }) {
   return (
-    <div className="max-w-5xl mx-auto mt-10">
-      <h2 className="text-3xl font-bold text-center text-gray-800 mb-6">
-        Employees
-      </h2>
+    <div className="bg-white rounded-lg shadow overflow-x-auto">
+      <table className="min-w-full border-collapse">
+        <thead className="bg-gray-100">
+          <tr>
+            <th className="p-3 text-left">ID</th>
+            <th className="p-3 text-left">Name</th>
+            <th className="p-3 text-left">Email</th>
+            <th className="p-3 text-left">Phone</th>
+            <th className="p-3 text-left">Department</th>
+            <th className="p-3 text-left">Designation</th>
+            <th className="p-3 text-center">Actions</th>
+          </tr>
+        </thead>
 
-      <div className="overflow-x-auto bg-white rounded-xl shadow-lg">
-        <table className="w-full">
-          <thead className="bg-blue-600 text-white">
-            <tr>
-              <th className="px-6 py-4 text-left">ID</th>
-              <th className="px-6 py-4 text-left">Name</th>
-              <th className="px-6 py-4 text-left">Email</th>
-              <th className="px-6 py-4 text-center">Action</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {employees.map((employee) => (
+        <tbody>
+          {employees.length > 0 ? (
+            employees.map((employee) => (
               <tr
                 key={employee.id}
-                className="border-b hover:bg-gray-100 transition"
+                className="border-t hover:bg-gray-50"
               >
-                <td className="px-6 py-4">{employee.id}</td>
-                <td className="px-6 py-4">{employee.name}</td>
-                <td className="px-6 py-4">{employee.email}</td>
+                <td className="p-3">{employee.id}</td>
 
-                <td className="px-6 py-4 flex justify-center gap-3">
-                  <button
-                    onClick={() => editEmployee(employee)}
-                    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg"
-                  >
-                    Edit
-                  </button>
+                <td className="p-3 font-medium">
+                  {employee.name}
+                </td>
 
-                  <button
-                    onClick={() => deleteEmployee(employee.id)}
-                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg"
-                  >
-                    Delete
-                  </button>
+                <td className="p-3">
+                  {employee.email}
+                </td>
+
+                <td className="p-3">
+                  {employee.phone}
+                </td>
+
+                <td className="p-3">
+                  {employee.department}
+                </td>
+
+                <td className="p-3">
+                  {employee.designation}
+                </td>
+
+                <td className="p-3 text-center">
+                  <div className="flex justify-center gap-2">
+                    <button
+                      onClick={() => editEmployee(employee)}
+                      className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg transition"
+                    >
+                      ✏️ Edit
+                    </button>
+
+                    <button
+                      onClick={() => deleteEmployee(employee.id)}
+                      className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition"
+                    >
+                      🗑 Delete
+                    </button>
+                  </div>
                 </td>
               </tr>
-            ))}
-
-            {employees.length === 0 && (
-              <tr>
-                <td
-                  colSpan="4"
-                  className="text-center py-6 text-gray-500"
-                >
-                  No employees found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            ))
+          ) : (
+            <tr>
+              <td
+                colSpan="7"
+                className="text-center p-6 text-gray-500"
+              >
+                No employees found.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }

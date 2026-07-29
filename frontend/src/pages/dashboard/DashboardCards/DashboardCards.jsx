@@ -1,50 +1,66 @@
+import { Users, CalendarCheck, Wallet, Package } from "lucide-react";
+import { motion } from "framer-motion";
+
+const cards = [
+  {
+    title: "Employees",
+    value: "120",
+    icon: Users,
+    color: "from-blue-500 to-blue-700",
+  },
+  {
+    title: "Attendance",
+    value: "98%",
+    icon: CalendarCheck,
+    color: "from-green-500 to-green-700",
+  },
+  {
+    title: "Payroll",
+    value: "₹2.5L",
+    icon: Wallet,
+    color: "from-yellow-500 to-orange-500",
+  },
+  {
+    title: "Inventory",
+    value: "320",
+    icon: Package,
+    color: "from-purple-500 to-purple-700",
+  },
+];
+
 function DashboardCards() {
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: "20px",
-        marginTop: "20px",
-      }}
-    >
-      <div
-        style={{
-          background: "#2563eb",
-          color: "white",
-          padding: "20px",
-          borderRadius: "10px",
-          width: "220px",
-        }}
-      >
-        <h3>Total Sales</h3>
-        <h2>₹1,25,000</h2>
-      </div>
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+      {cards.map((card, index) => {
+        const Icon = card.icon;
 
-      <div
-        style={{
-          background: "#16a34a",
-          color: "white",
-          padding: "20px",
-          borderRadius: "10px",
-          width: "220px",
-        }}
-      >
-        <h3>Employees</h3>
-        <h2>52</h2>
-      </div>
+        return (
+          <motion.div
+            key={index}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.97 }}
+            className={`bg-gradient-to-r ${card.color} rounded-2xl p-6 text-white shadow-lg`}
+          >
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm opacity-80">{card.title}</p>
 
-      <div
-        style={{
-          background: "#ea580c",
-          color: "white",
-          padding: "20px",
-          borderRadius: "10px",
-          width: "220px",
-        }}
-      >
-        <h3>Products</h3>
-        <h2>420</h2>
-      </div>
+                <h2 className="text-3xl font-bold mt-2">
+                  {card.value}
+                </h2>
+
+                <p className="text-xs mt-2 opacity-80">
+                  +12% from last month
+                </p>
+              </div>
+
+              <div className="bg-white/20 p-3 rounded-full">
+                <Icon size={36} />
+              </div>
+            </div>
+          </motion.div>
+        );
+      })}
     </div>
   );
 }
