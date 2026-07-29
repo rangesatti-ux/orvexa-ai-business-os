@@ -1,10 +1,13 @@
 version: "3.9"
 
 services:
+
   postgres:
     image: postgres:16
 
-    container_name: orvexa-db
+    container_name: orvexa_postgres
+
+    restart: always
 
     environment:
       POSTGRES_USER: postgres
@@ -20,16 +23,19 @@ services:
   backend:
     build: .
 
-    container_name: orvexa-backend
+    container_name: orvexa_backend
 
     depends_on:
       - postgres
 
-    env_file:
-      - .env
-
     ports:
       - "8000:8000"
+
+    environment:
+      DATABASE_URL: postgresql://postgres:Orvexa%40123@postgres:5432/orvexa_db
+      SECRET_KEY: ReplaceThisWithALongRandomSecretKey123456789
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
 
 volumes:
   postgres_data:

@@ -1,7 +1,5 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from dotenv import load_dotenv
-import os
 
 from app.database.base import Base
 from app.models.user import User
@@ -18,16 +16,12 @@ from app.models.payroll import Payroll
 from app.models.audit_log import AuditLog
 from app.models.notification import Notification
 
-import os
+from app.core.config import settings
 
-if not os.getenv("GITHUB_ACTIONS"):
-    load_dotenv()
-
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-print("DATABASE_URL =", DATABASE_URL)
-
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    settings.DATABASE_URL,
+    pool_pre_ping=True,
+)
 
 SessionLocal = sessionmaker(
     autocommit=False,

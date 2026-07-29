@@ -1,10 +1,7 @@
 from fastapi import FastAPI
 
 from app.database.connection import Base, engine
-from app.models.user import User
-from app.models.employee import Employee
 from app.routes.auth import router as auth_router
-from app.models.product import Product
 from app.routes.employee import router as employee_router
 from app.routes.product import router as product_router
 from app.routes.sale import router as sale_router
@@ -26,31 +23,37 @@ from app.routes.reports import router as reports_router
 from app.routes.analytics import router as analytics_router
 from app.routes.audit import router as audit_router
 from app.routes.notification import router as notification_router
+from app.routes.health import router as health_router
+from app.exceptions.handlers import register_exception_handlers
+from app.core.logging_config import logger
+from app.middleware.request_id import RequestIDMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
+from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import settings
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+
+from app.core.rate_limit import limiter
+from app.exceptions.rate_limit import rate_limit_handler
+from prometheus_fastapi_instrumentator import Instrumentator
+from app.core.lifespan import lifespan
 from app.routes import dashboard
 
 app = FastAPI(
-    title="Orvexa AI Business OS",
+    title=settings.APP_NAME,
+    version=settings.APP_VERSION,
     description="""
-AI-powered Business Management System
-
-Features:
-- Authentication
-- Employee Management
-- Inventory Management
-- Sales
-- Purchases
-- Customers
-- Suppliers
-- Attendance
-- Leave Management
-- Payroll
-- Reports
-- Analytics
-- AI Insights
-- Notifications
-- Audit Logs
+    Orvexa AI Business OS is a comprehensive business management system that integrates various functionalities to streamline operations. It includes modules for:
+    - Attendance
+    - Leave Management
+    - Payroll
+    - Reports
+    - Analytics
+    - AI Insights
+    - Notifications
+    - Audit Logs
 """,
-    version="1.0.0",
+    lifespan=lifespan,
     contact={
         "name": "Naga Gopi Rangisetti",
         "email": "your-email@example.com"
@@ -59,7 +62,6 @@ Features:
         "name": "MIT"
     }
 )
-Base.metadata.create_all(bind=engine)
 app.include_router(auth_router)
 app.include_router(employee_router)
 app.include_router(product_router)
@@ -74,6 +76,25 @@ app.include_router(reports_router)
 app.include_router(analytics_router)
 app.include_router(audit_router)
 app.include_router(notification_router)
+app.include_router(health_router)
+register_exception_handlers(app)
+logger.info("Orvexa AI Business OS started successfully.")
+app.add_middleware(RequestIDMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
+app.add_exception_handler(
+    RateLimitExceeded,
+    rate_limit_handler,
+)
+Instrumentator().instrument(app).expose(app)
 app.include_router(dashboard.router)
 
 

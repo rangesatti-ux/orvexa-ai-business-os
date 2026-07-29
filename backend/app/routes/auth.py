@@ -11,6 +11,8 @@ from app.utils.security import (
     create_access_token
 )
 from app.dependencies.auth import get_current_user
+from fastapi import Request
+from app.core.rate_limit import limiter
 
 router = APIRouter(
     prefix="/auth",
@@ -45,14 +47,15 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     }
 
 @router.post("/login", response_model=Token)
+@limiter.limit("5/minute")
 def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
+    users = db.query(User).all()
 
-    db_user = db.query(User).filter(
-    User.email == form_data.username
-).first()
+    
 
     if not db_user:
         raise HTTPException(

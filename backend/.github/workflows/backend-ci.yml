@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+
   pull_request:
     branches:
       - main
@@ -15,26 +16,24 @@ jobs:
     services:
       postgres:
         image: postgres:16
-
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: orvexa_db
-
+          POSTGRES_DB: orvexa
         ports:
           - 5432:5432
-
         options: >-
           --health-cmd="pg_isready -U postgres"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
 
+    defaults:
+      run:
+        working-directory: backend
+
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/orvexa_db
-      SECRET_KEY: ReplaceThisWithALongRandomSecretKey123456789
-      ALGORITHM: HS256
-      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/orvexa
 
     steps:
       - name: Checkout Repository
@@ -51,10 +50,4 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Tests
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/orvexa_db
-          SECRET_KEY: ReplaceThisWithALongRandomSecretKey123456789
-          ALGORITHM: HS256
-          ACCESS_TOKEN_EXPIRE_MINUTES: 60
-        run: |
-          pytest
+        run: pytest
