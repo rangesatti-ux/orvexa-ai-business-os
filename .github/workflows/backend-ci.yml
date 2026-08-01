@@ -49,5 +49,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Wait for PostgreSQL
+        run: |
+          for i in {1..30}; do
+            pg_isready -h localhost -p 5432 -U postgres && break
+            echo "Waiting for PostgreSQL..."
+            sleep 1
+          done
+
+      - name: Run Alembic Migrations
+        run: |
+          alembic upgrade head
+
       - name: Run Tests
-        run: pytest
+        run: |
+          pytest

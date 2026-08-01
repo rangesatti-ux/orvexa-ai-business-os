@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
-from app.database.connection import Base
+from app.database.base import Base
 
 
 class Customer(Base):

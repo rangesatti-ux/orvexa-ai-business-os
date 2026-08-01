@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, Float, ForeignKey
 from sqlalchemy.orm import relationship
 
-from app.database.connection import Base
+from app.database.base import Base
 
 
 class SaleItem(Base):

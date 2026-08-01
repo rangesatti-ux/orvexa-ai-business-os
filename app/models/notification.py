@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.sql import func
 
-from app.database.connection import Base
+from app.database.base import Base
 
 
 class Notification(Base):

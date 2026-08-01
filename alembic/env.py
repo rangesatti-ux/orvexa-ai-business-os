@@ -5,8 +5,7 @@ from sqlalchemy import pool
 
 from alembic import context
 from app.database.connection import Base
-from app.models.user import User
-from app.models.employee import Employee
+import app.models
 from app.models.product import Product
 from app.models.customer import Customer
 from app.models.supplier import Supplier
@@ -18,12 +17,15 @@ from app.models.leave import Leave
 from app.models.payroll import Payroll
 from app.models.audit_log import AuditLog
 from app.models.notification import Notification
-from app.core.config import DATABASE_URL
-from app.database.connection import engine
+from app.core.config import settings
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+config.set_main_option(
+    "sqlalchemy.url",
+    settings.DATABASE_URL.replace("%", "%%")
+)
 
 
 # Interpret the config file for Python logging.
@@ -68,9 +70,13 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode."""
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
 
-    with engine.connect() as connection:
+    with connectable.connect() as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,

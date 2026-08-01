@@ -2,7 +2,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy import Column, Integer, String, Float, DateTime
 from sqlalchemy.sql import func
 
-from app.database.connection import Base
+from app.database.base import Base
 
 
 class Product(Base):
