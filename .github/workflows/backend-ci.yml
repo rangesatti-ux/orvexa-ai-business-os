@@ -16,12 +16,15 @@ jobs:
     services:
       postgres:
         image: postgres:16
+
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: orvexa
+
         ports:
           - 5432:5432
+
         options: >-
           --health-cmd="pg_isready -U postgres"
           --health-interval=10s
@@ -34,6 +37,9 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/orvexa
+      SECRET_KEY: ReplaceThisWithALongRandomSecretKey123456789
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
 
     steps:
       - name: Checkout Repository
@@ -57,9 +63,9 @@ jobs:
             sleep 1
           done
 
-      - name: Run Alembic Migrations
+      - name: Create Database Tables
         run: |
-          alembic upgrade head
+          python -c "from app.database.connection import Base, engine; Base.metadata.create_all(bind=engine)"
 
       - name: Run Tests
         run: |
