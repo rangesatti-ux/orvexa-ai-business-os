@@ -63,8 +63,18 @@ jobs:
           done
 
       - name: Run Alembic Migrations
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
         run: |
-          alembic -c alembic.ini upgrade head
+          echo "Using DATABASE_URL=$DATABASE_URL"
+          alembic -c alembic.ini upgrade head --raiseerr
+
+      - name: Show Alembic Current
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: |
+          alembic -c alembic.ini current
+          alembic -c alembic.ini history --verbose | sed -n '1,40p'
 
       - name: Run Tests
         run: |
