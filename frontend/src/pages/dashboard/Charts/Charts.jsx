@@ -33,29 +33,41 @@ function Charts() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-      <div className="bg-white rounded-xl shadow p-5">
-        <h2 className="text-xl font-bold mb-4">
+      {/* Monthly Sales */}
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-5 transition-colors">
+        <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">
           Monthly Sales
         </h2>
 
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={salesData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="month" />
-            <YAxis />
+            <CartesianGrid strokeDasharray="3 3" stroke="#d1d5db" />
+            <XAxis
+              dataKey="month"
+              stroke="#6b7280"
+            />
+            <YAxis
+              stroke="#6b7280"
+            />
             <Tooltip />
-            <Bar dataKey="sales" fill="#3b82f6" radius={[8,8,0,0]} />
+            <Bar
+              dataKey="sales"
+              fill="#3b82f6"
+              radius={[8, 8, 0, 0]}
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>
 
-      <div className="bg-white rounded-xl shadow p-5">
-        <h2 className="text-xl font-bold mb-4">
+      {/* Attendance */}
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-5 transition-colors">
+        <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">
           Attendance Overview
         </h2>
 
         <ResponsiveContainer width="100%" height={300}>
           <PieChart>
+
             <Pie
               data={attendanceData}
               dataKey="value"
@@ -72,6 +84,7 @@ function Charts() {
 
             <Legend />
             <Tooltip />
+
           </PieChart>
         </ResponsiveContainer>
       </div>

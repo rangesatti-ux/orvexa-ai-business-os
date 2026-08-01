@@ -1,61 +1,54 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "react-toastify";
 
 import InventoryForm from "./InventoryForm";
 import InventoryTable from "./InventoryTable";
 
-import { exportToPDF } from "../../utils/exportPDF";
-import { exportToExcel } from "../../utils/exportExcel";
-
 function InventoryPage() {
-  const [products, setProducts] = useState([
-    {
-      id: 1,
-      name: "Laptop",
-      category: "Electronics",
-      quantity: 20,
-      price: 50000,
-      supplier: "Dell",
-    },
-    {
-      id: 2,
-      name: "Printer",
-      category: "Office",
-      quantity: 5,
-      price: 12000,
-      supplier: "HP",
-    },
-  ]);
+  const [products, setProducts] = useState(() => {
+    const saved = localStorage.getItem("inventory");
+
+    return saved
+      ? JSON.parse(saved)
+      : [
+          {
+            id: 1,
+            name: "Laptop",
+            category: "Electronics",
+            quantity: 20,
+            price: 50000,
+            supplier: "Dell",
+          },
+          {
+            id: 2,
+            name: "Printer",
+            category: "Office",
+            quantity: 5,
+            price: 12000,
+            supplier: "HP",
+          },
+        ];
+  });
 
   const [search, setSearch] = useState("");
-  const [editingProduct, setEditingProduct] = useState(null);
-  const [isEditing, setIsEditing] = useState(false);
 
-  const saveProduct = (product) => {
-    if (isEditing) {
-      setProducts((prev) =>
-        prev.map((item) =>
-          item.id === editingProduct.id
-            ? { ...product, id: editingProduct.id }
-            : item
-        )
-      );
+  useEffect(() => {
+    localStorage.setItem(
+      "inventory",
+      JSON.stringify(products)
+    );
+  }, [products]);
 
-      toast.success("Product updated successfully!");
+  const addProduct = (product) => {
+    setProducts((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        ...product,
+      },
+    ]);
 
-      setEditingProduct(null);
-      setIsEditing(false);
-    } else {
-      setProducts((prev) => [
-        ...prev,
-        {
-          id: Date.now(),
-          ...product,
-        },
-      ]);
-
-      toast.success("Product added successfully!");
-    }
+    toast.success("Product Added Successfully");
   };
 
   const deleteProduct = (id) => {
@@ -63,12 +56,7 @@ function InventoryPage() {
       prev.filter((item) => item.id !== id)
     );
 
-    toast.error("Product deleted successfully!");
-  };
-
-  const editProduct = (product) => {
-    setEditingProduct(product);
-    setIsEditing(true);
+    toast.error("Product Deleted");
   };
 
   const filteredProducts = products.filter(
@@ -79,80 +67,57 @@ function InventoryPage() {
   );
 
   const totalStock = products.reduce(
-    (sum, item) => sum + Number(item.quantity),
+    (sum, item) => sum + item.quantity,
     0
   );
 
   const totalValue = products.reduce(
-    (sum, item) =>
-      sum + Number(item.quantity) * Number(item.price),
+    (sum, item) => sum + item.quantity * item.price,
     0
   );
 
   const lowStock = products.filter(
-    (item) => Number(item.quantity) < 10
+    (item) => item.quantity < 10
   ).length;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
 
-      <div className="flex justify-between items-center">
-
-        <h1 className="text-3xl font-bold">
-          Inventory Management
-        </h1>
-
-        <div className="flex gap-3">
-
-          <button
-            onClick={() =>
-              exportToPDF(filteredProducts, "Inventory_Report")
-            }
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
-          >
-            📄 Export PDF
-          </button>
-
-          <button
-            onClick={() =>
-              exportToExcel(filteredProducts, "Inventory_Report")
-            }
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
-          >
-            📊 Export Excel
-          </button>
-
-        </div>
-
-      </div>
+      <h1 className="text-3xl font-bold text-gray-800 dark:text-white">
+        Inventory Management
+      </h1>
 
       {/* Dashboard Cards */}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
 
-        <div className="bg-blue-600 text-white rounded-xl p-5">
+        <div className="bg-blue-500 text-white rounded-xl p-5 shadow">
           <h3>Total Products</h3>
+
           <p className="text-3xl font-bold">
             {products.length}
           </p>
         </div>
 
-        <div className="bg-green-600 text-white rounded-xl p-5">
+        <div className="bg-green-500 text-white rounded-xl p-5 shadow">
           <h3>Total Stock</h3>
+
           <p className="text-3xl font-bold">
             {totalStock}
           </p>
         </div>
 
-        <div className="bg-yellow-500 text-white rounded-xl p-5">
+        <div className="bg-yellow-500 text-white rounded-xl p-5 shadow">
           <h3>Low Stock</h3>
+
           <p className="text-3xl font-bold">
             {lowStock}
           </p>
         </div>
 
-        <div className="bg-red-600 text-white rounded-xl p-5">
+        <div className="bg-red-500 text-white rounded-xl p-5 shadow">
           <h3>Total Value</h3>
+
           <p className="text-3xl font-bold">
             ₹{totalValue.toLocaleString()}
           </p>
@@ -160,24 +125,27 @@ function InventoryPage() {
 
       </div>
 
+      {/* Add Product Form */}
+
       <InventoryForm
-        saveProduct={saveProduct}
-        editingProduct={editingProduct}
-        isEditing={isEditing}
+        addProduct={addProduct}
       />
+
+      {/* Search */}
 
       <input
         type="text"
         placeholder="Search Product..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full md:w-96 border rounded-lg p-3"
+        className="w-full border rounded-lg p-3 bg-white dark:bg-slate-800 dark:text-white dark:border-slate-700"
       />
+
+      {/* Inventory Table */}
 
       <InventoryTable
         products={filteredProducts}
         deleteProduct={deleteProduct}
-        editProduct={editProduct}
       />
 
     </div>

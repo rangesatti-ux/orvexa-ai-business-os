@@ -1,40 +1,49 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "react-toastify";
 
 import LeaveForm from "./LeaveForm";
 import LeaveTable from "./LeaveTable";
 
-import { exportToPDF } from "../../utils/exportPDF";
-import { exportToExcel } from "../../utils/exportExcel";
-
 function LeavePage() {
-  const [leaveData, setLeaveData] = useState([
-    {
-      id: 1,
-      employee: "John",
-      type: "Sick Leave",
-      from: "2026-08-10",
-      to: "2026-08-12",
-      reason: "Fever",
-      status: "Approved",
-    },
-    {
-      id: 2,
-      employee: "Rahul",
-      type: "Casual Leave",
-      from: "2026-08-15",
-      to: "2026-08-16",
-      reason: "Family Function",
-      status: "Pending",
-    },
-  ]);
+  const [leaveData, setLeaveData] = useState(() => {
+    const saved = localStorage.getItem("leaveData");
+
+    return saved
+      ? JSON.parse(saved)
+      : [
+          {
+            id: 1,
+            employee: "John",
+            type: "Sick Leave",
+            from: "2026-08-10",
+            to: "2026-08-12",
+            reason: "Fever",
+            status: "Approved",
+          },
+          {
+            id: 2,
+            employee: "Rahul",
+            type: "Casual Leave",
+            from: "2026-08-15",
+            to: "2026-08-16",
+            reason: "Family Function",
+            status: "Pending",
+          },
+        ];
+  });
 
   const [editingLeave, setEditingLeave] = useState(null);
-  const [isEditing, setIsEditing] = useState(false);
   const [search, setSearch] = useState("");
 
-  const saveLeave = (leave) => {
-    if (isEditing) {
+  useEffect(() => {
+    localStorage.setItem(
+      "leaveData",
+      JSON.stringify(leaveData)
+    );
+  }, [leaveData]);
+
+  const addLeave = (leave) => {
+    if (editingLeave) {
       setLeaveData((prev) =>
         prev.map((item) =>
           item.id === editingLeave.id
@@ -43,10 +52,8 @@ function LeavePage() {
         )
       );
 
-      toast.success("Leave updated successfully!");
-
+      toast.success("Leave Updated Successfully");
       setEditingLeave(null);
-      setIsEditing(false);
     } else {
       setLeaveData((prev) => [
         ...prev,
@@ -56,7 +63,7 @@ function LeavePage() {
         },
       ]);
 
-      toast.success("Leave added successfully!");
+      toast.success("Leave Added Successfully");
     }
   };
 
@@ -65,66 +72,44 @@ function LeavePage() {
       prev.filter((item) => item.id !== id)
     );
 
-    toast.error("Leave deleted successfully!");
+    toast.error("Leave Deleted");
   };
 
   const editLeave = (leave) => {
     setEditingLeave(leave);
-    setIsEditing(true);
   };
 
   const filteredLeave = leaveData.filter(
     (leave) =>
-      leave.employee.toLowerCase().includes(search.toLowerCase()) ||
-      leave.type.toLowerCase().includes(search.toLowerCase()) ||
-      leave.status.toLowerCase().includes(search.toLowerCase())
+      leave.employee
+        .toLowerCase()
+        .includes(search.toLowerCase()) ||
+      leave.type
+        .toLowerCase()
+        .includes(search.toLowerCase()) ||
+      leave.status
+        .toLowerCase()
+        .includes(search.toLowerCase())
   );
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
 
-      <div className="flex justify-between items-center">
-
-        <h1 className="text-3xl font-bold">
-          Leave Management
-        </h1>
-
-        <div className="flex gap-3">
-
-          <button
-            onClick={() =>
-              exportToPDF(filteredLeave, "Leave_Report")
-            }
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
-          >
-            📄 Export PDF
-          </button>
-
-          <button
-            onClick={() =>
-              exportToExcel(filteredLeave, "Leave_Report")
-            }
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
-          >
-            📊 Export Excel
-          </button>
-
-        </div>
-
-      </div>
+      <h1 className="text-3xl font-bold text-gray-800 dark:text-white">
+        Leave Management
+      </h1>
 
       {/* Dashboard Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-
-        <div className="bg-blue-600 text-white rounded-xl p-5">
+        <div className="bg-blue-500 text-white rounded-xl p-5 shadow">
           <h3>Total Requests</h3>
           <p className="text-3xl font-bold">
             {leaveData.length}
           </p>
         </div>
 
-        <div className="bg-green-600 text-white rounded-xl p-5">
+        <div className="bg-green-500 text-white rounded-xl p-5 shadow">
           <h3>Approved</h3>
           <p className="text-3xl font-bold">
             {
@@ -135,7 +120,7 @@ function LeavePage() {
           </p>
         </div>
 
-        <div className="bg-yellow-500 text-white rounded-xl p-5">
+        <div className="bg-yellow-500 text-white rounded-xl p-5 shadow">
           <h3>Pending</h3>
           <p className="text-3xl font-bold">
             {
@@ -146,7 +131,7 @@ function LeavePage() {
           </p>
         </div>
 
-        <div className="bg-red-600 text-white rounded-xl p-5">
+        <div className="bg-red-500 text-white rounded-xl p-5 shadow">
           <h3>Rejected</h3>
           <p className="text-3xl font-bold">
             {
@@ -159,20 +144,22 @@ function LeavePage() {
 
       </div>
 
+      {/* Leave Form */}
+      <LeaveForm
+        addLeave={addLeave}
+        editingLeave={editingLeave}
+      />
+
+      {/* Search */}
       <input
         type="text"
         placeholder="Search Leave..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full md:w-96 border rounded-lg p-3"
+        className="w-full border rounded-lg p-3 bg-white dark:bg-slate-800 dark:text-white dark:border-slate-700"
       />
 
-      <LeaveForm
-        saveLeave={saveLeave}
-        editingLeave={editingLeave}
-        isEditing={isEditing}
-      />
-
+      {/* Leave Table */}
       <LeaveTable
         leaveData={filteredLeave}
         deleteLeave={deleteLeave}

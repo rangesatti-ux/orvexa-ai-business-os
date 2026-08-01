@@ -37,25 +37,28 @@ function DashboardCards() {
         return (
           <motion.div
             key={index}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.97 }}
-            className={`bg-gradient-to-r ${card.color} rounded-2xl p-6 text-white shadow-lg`}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+            className={`bg-gradient-to-r ${card.color} rounded-2xl p-6 text-white shadow-xl`}
           >
-            <div className="flex justify-between items-center">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm opacity-80">{card.title}</p>
+                <p className="text-sm opacity-80">
+                  {card.title}
+                </p>
 
                 <h2 className="text-3xl font-bold mt-2">
                   {card.value}
                 </h2>
 
-                <p className="text-xs mt-2 opacity-80">
+                <p className="text-xs opacity-80 mt-2">
                   +12% from last month
                 </p>
               </div>
 
-              <div className="bg-white/20 p-3 rounded-full">
-                <Icon size={36} />
+              <div className="bg-white/20 rounded-full p-4">
+                <Icon size={34} />
               </div>
             </div>
           </motion.div>

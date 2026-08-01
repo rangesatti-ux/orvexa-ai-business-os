@@ -1,35 +1,48 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "react-toastify";
 
 import EmployeeForm from "./EmployeeForm";
 import EmployeesTable from "./EmployeesTable";
 
-import { exportToPDF } from "../../utils/exportPDF";
-import { exportToExcel } from "../../utils/exportExcel";
+import exportEmployeesPDF from "../../utils/exportPDF";
+import exportEmployeesExcel from "../../utils/exportExcel";
 
 function EmployeePage() {
-  const [employees, setEmployees] = useState([
-    {
-      id: 1,
-      name: "John Doe",
-      email: "john@example.com",
-      phone: "9876543210",
-      department: "IT",
-      designation: "Software Engineer",
-    },
-    {
-      id: 2,
-      name: "Alice",
-      email: "alice@example.com",
-      phone: "9123456780",
-      department: "HR",
-      designation: "HR Manager",
-    },
-  ]);
+  const [employees, setEmployees] = useState(() => {
+    const saved = localStorage.getItem("employees");
+
+    return saved
+      ? JSON.parse(saved)
+      : [
+          {
+            id: 1,
+            name: "John Doe",
+            email: "john@example.com",
+            phone: "9876543210",
+            department: "IT",
+            designation: "Software Engineer",
+          },
+          {
+            id: 2,
+            name: "Alice",
+            email: "alice@example.com",
+            phone: "9123456780",
+            department: "HR",
+            designation: "HR Manager",
+          },
+        ];
+  });
 
   const [search, setSearch] = useState("");
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "employees",
+      JSON.stringify(employees)
+    );
+  }, [employees]);
 
   const saveEmployee = (employee) => {
     if (isEditing) {
@@ -41,7 +54,7 @@ function EmployeePage() {
         )
       );
 
-      toast.success("Employee updated successfully!");
+      toast.success("Employee Updated Successfully");
 
       setEditingEmployee(null);
       setIsEditing(false);
@@ -54,14 +67,16 @@ function EmployeePage() {
         },
       ]);
 
-      toast.success("Employee added successfully!");
+      toast.success("Employee Added Successfully");
     }
   };
 
   const deleteEmployee = (id) => {
-    setEmployees((prev) => prev.filter((emp) => emp.id !== id));
+    setEmployees((prev) =>
+      prev.filter((emp) => emp.id !== id)
+    );
 
-    toast.error("Employee deleted successfully!");
+    toast.error("Employee Deleted");
   };
 
   const editEmployee = (employee) => {
@@ -73,97 +88,85 @@ function EmployeePage() {
     (emp) =>
       emp.name.toLowerCase().includes(search.toLowerCase()) ||
       emp.email.toLowerCase().includes(search.toLowerCase()) ||
-      emp.department.toLowerCase().includes(search.toLowerCase()) ||
-      emp.designation.toLowerCase().includes(search.toLowerCase())
+      emp.department.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
 
-      <div className="flex justify-between items-center">
-
-        <h1 className="text-3xl font-bold">
-          Employee Management
-        </h1>
-
-        <div className="flex gap-3">
-
-          <button
-            onClick={() =>
-              exportToPDF(filteredEmployees, "Employees_Report")
-            }
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
-          >
-            📄 Export PDF
-          </button>
-
-          <button
-            onClick={() =>
-              exportToExcel(filteredEmployees, "Employees_Report")
-            }
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
-          >
-            📊 Export Excel
-          </button>
-
-        </div>
-
-      </div>
+      <h1 className="text-3xl font-bold text-gray-800 dark:text-white">
+        Employee Management
+      </h1>
 
       {/* Dashboard Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-
-        <div className="bg-blue-600 text-white rounded-xl p-5 shadow">
-          <p>Total Employees</p>
-          <h2 className="text-3xl font-bold mt-2">
+        <div className="bg-blue-500 text-white rounded-xl p-5">
+          <h3>Total Employees</h3>
+          <p className="text-3xl font-bold">
             {employees.length}
-          </h2>
+          </p>
         </div>
 
-        <div className="bg-green-600 text-white rounded-xl p-5 shadow">
-          <p>Departments</p>
-          <h2 className="text-3xl font-bold mt-2">
+        <div className="bg-green-500 text-white rounded-xl p-5">
+          <h3>Departments</h3>
+          <p className="text-3xl font-bold">
             {[...new Set(employees.map((e) => e.department))].length}
-          </h2>
+          </p>
         </div>
 
-        <div className="bg-yellow-500 text-white rounded-xl p-5 shadow">
-          <p>Designations</p>
-          <h2 className="text-3xl font-bold mt-2">
+        <div className="bg-yellow-500 text-white rounded-xl p-5">
+          <h3>Designations</h3>
+          <p className="text-3xl font-bold">
             {[...new Set(employees.map((e) => e.designation))].length}
-          </h2>
+          </p>
         </div>
 
-        <div className="bg-purple-600 text-white rounded-xl p-5 shadow">
-          <p>Search Results</p>
-          <h2 className="text-3xl font-bold mt-2">
+        <div className="bg-red-500 text-white rounded-xl p-5">
+          <h3>Search Results</h3>
+          <p className="text-3xl font-bold">
             {filteredEmployees.length}
-          </h2>
+          </p>
         </div>
 
       </div>
 
-      {/* Search */}
-
-      <input
-        type="text"
-        placeholder="Search employee..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="w-full md:w-96 border rounded-lg p-3"
-      />
-
-      {/* Form */}
-
+      {/* Employee Form */}
       <EmployeeForm
         addEmployee={saveEmployee}
         editingEmployee={editingEmployee}
         isEditing={isEditing}
       />
 
-      {/* Table */}
+      {/* Search */}
+      <input
+        type="text"
+        placeholder="Search Employee..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="w-full border rounded-lg p-3 bg-white dark:bg-slate-800 dark:text-white dark:border-slate-700"
+      />
 
+      {/* Export Buttons */}
+      <div className="flex gap-4">
+
+        <button
+          onClick={() => exportEmployeesPDF(filteredEmployees)}
+          className="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-lg"
+        >
+          📄 Export PDF
+        </button>
+
+        <button
+          onClick={() => exportEmployeesExcel(filteredEmployees)}
+          className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg"
+        >
+          📊 Export Excel
+        </button>
+
+      </div>
+
+      {/* Employee Table */}
       <EmployeesTable
         employees={filteredEmployees}
         deleteEmployee={deleteEmployee}

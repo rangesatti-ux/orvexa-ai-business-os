@@ -3,20 +3,47 @@ import { createContext, useContext, useState } from "react";
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem("user");
+    return saved ? JSON.parse(saved) : null;
+  });
 
-  const login = () => {
-    setIsLoggedIn(true);
+  const login = (email, password) => {
+    let loggedUser;
+
+    if (email === "admin@gmail.com") {
+      loggedUser = {
+        name: "Admin",
+        email,
+        role: "admin",
+      };
+    } else if (email === "hr@gmail.com") {
+      loggedUser = {
+        name: "HR Manager",
+        email,
+        role: "hr",
+      };
+    } else {
+      loggedUser = {
+        name: "Employee",
+        email,
+        role: "employee",
+      };
+    }
+
+    localStorage.setItem("user", JSON.stringify(loggedUser));
+    setUser(loggedUser);
   };
 
   const logout = () => {
-    setIsLoggedIn(false);
+    localStorage.removeItem("user");
+    setUser(null);
   };
 
   return (
     <AuthContext.Provider
       value={{
-        isLoggedIn,
+        user,
         login,
         logout,
       }}
@@ -26,6 +53,4 @@ export function AuthProvider({ children }) {
   );
 }
 
-export function useAuth() {
-  return useContext(AuthContext);
-}
+export const useAuth = () => useContext(AuthContext);
