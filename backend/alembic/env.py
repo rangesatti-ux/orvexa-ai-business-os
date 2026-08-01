@@ -1,4 +1,5 @@
 from logging.config import fileConfig
+import os
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
@@ -19,12 +20,18 @@ from app.models.payroll import Payroll
 from app.models.audit_log import AuditLog
 from app.models.notification import Notification
 from app.core.config import settings
-from app.database.connection import engine
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+
+# Allow overriding the sqlalchemy URL from the environment in CI
+# First prefer an explicit environment variable, then the project's settings
+env_database_url = os.getenv("DATABASE_URL")
+if env_database_url:
+    config.set_main_option("sqlalchemy.url", env_database_url)
+else:
+    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 
 # Interpret the config file for Python logging.
@@ -36,6 +43,7 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
+# Importing Base from app.database.connection keeps target metadata centralized
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
@@ -71,7 +79,15 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
 
-    with engine.connect() as connection:
+    # Create an Engine from the configuration; this ensures Alembic uses
+    # the same DATABASE_URL that was set on the config above (e.g., from CI).
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+
+    with connectable.connect() as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
