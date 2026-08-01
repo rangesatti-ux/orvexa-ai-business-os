@@ -67,7 +67,7 @@ jobs:
           DATABASE_URL: ${{ env.DATABASE_URL }}
         run: |
           echo "Using DATABASE_URL=$DATABASE_URL"
-          alembic -c alembic.ini upgrade head --raiseerr
+          alembic -c alembic.ini upgrade head
 
       - name: Show Alembic Current
         env:
