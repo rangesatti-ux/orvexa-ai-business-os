@@ -76,6 +76,17 @@ jobs:
           alembic -c alembic.ini current
           alembic -c alembic.ini history --verbose | sed -n '1,40p'
 
+      - name: Ensure DB schema (create missing tables from models)
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: |
+          python - <<'PY'
+          from app.database.base import Base
+          from app.database.connection import engine
+          Base.metadata.create_all(bind=engine)
+          print('Ensured DB schema: created any missing tables')
+          PY
+
       - name: Run Tests
         run: |
           pytest
