@@ -63,9 +63,31 @@ jobs:
             sleep 1
           done
 
-      - name: Create Database Tables
+      - name: Debug Database
         run: |
-          python -c "from app.database.connection import Base, engine; Base.metadata.create_all(bind=engine)"
+          python - <<'EOF'
+          from app.database.connection import Base, engine
+          from sqlalchemy import inspect
+
+          print("=" * 60)
+          print("DATABASE URL:")
+          print(engine.url)
+
+          print("=" * 60)
+          print("METADATA TABLES:")
+          print(list(Base.metadata.tables.keys()))
+
+          print("=" * 60)
+          print("CREATING TABLES...")
+          Base.metadata.create_all(bind=engine)
+
+          inspector = inspect(engine)
+
+          print("=" * 60)
+          print("TABLES IN DATABASE:")
+          print(inspector.get_table_names())
+          print("=" * 60)
+          EOF
 
       - name: Run Tests
         run: |
