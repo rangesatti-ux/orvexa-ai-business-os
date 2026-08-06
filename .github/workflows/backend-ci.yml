@@ -63,31 +63,27 @@ jobs:
             sleep 1
           done
 
-      - name: Debug Database
+      - name: Run Alembic Migrations
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
         run: |
-          python - <<'EOF'
-          from app.database.connection import Base, engine
-          from sqlalchemy import inspect
+          echo "========================================"
+          echo "DATABASE_URL=$DATABASE_URL"
+          echo "========================================"
 
-          print("=" * 60)
-          print("DATABASE URL:")
-          print(engine.url)
+          echo "Alembic Current Revision:"
+          alembic current || true
 
-          print("=" * 60)
-          print("METADATA TABLES:")
-          print(list(Base.metadata.tables.keys()))
+          echo "Running Migrations..."
+          alembic upgrade head
 
-          print("=" * 60)
-          print("CREATING TABLES...")
-          Base.metadata.create_all(bind=engine)
+          echo "Migration Complete."
 
-          inspector = inspect(engine)
+          echo "Current Revision After Upgrade:"
+          alembic current
 
-          print("=" * 60)
-          print("TABLES IN DATABASE:")
-          print(inspector.get_table_names())
-          print("=" * 60)
-          EOF
+          echo "Migration History:"
+          alembic history
 
       - name: Run Tests
         run: |
