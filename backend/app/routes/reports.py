@@ -3,14 +3,13 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
-
 from app.models.employee import Employee
 from app.models.product import Product
 from app.models.sale import Sale
 from app.models.payroll import Payroll
-
 from app.services.pdf_service import generate_pdf
 from app.services.excel_service import generate_excel
+
 
 router = APIRouter(
     prefix="/reports",
@@ -26,11 +25,10 @@ router = APIRouter(
 def employee_pdf(
     db: Session = Depends(get_db)
 ):
-
     employees = db.query(Employee).all()
 
     rows = [
-        f"{e.id} | {e.first_name} {e.last_name}"
+        f"{e.id} | {e.full_name}"
         for e in employees
     ]
 
@@ -57,20 +55,18 @@ def employee_pdf(
 def employee_excel(
     db: Session = Depends(get_db)
 ):
-
     employees = db.query(Employee).all()
 
     rows = [
         [
             e.id,
-            e.first_name,
-            e.last_name
+            e.full_name
         ]
         for e in employees
     ]
 
     excel = generate_excel(
-        ["ID", "First Name", "Last Name"],
+        ["ID", "Full Name"],
         rows
     )
 
@@ -92,7 +88,6 @@ def employee_excel(
 def inventory_pdf(
     db: Session = Depends(get_db)
 ):
-
     products = db.query(Product).all()
 
     rows = [
@@ -123,7 +118,6 @@ def inventory_pdf(
 def sales_pdf(
     db: Session = Depends(get_db)
 ):
-
     sales = db.query(Sale).all()
 
     rows = [
@@ -154,7 +148,6 @@ def sales_pdf(
 def payroll_pdf(
     db: Session = Depends(get_db)
 ):
-
     payrolls = db.query(Payroll).all()
 
     rows = [

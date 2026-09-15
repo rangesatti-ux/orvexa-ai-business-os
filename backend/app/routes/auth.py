@@ -53,9 +53,11 @@ def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
-    users = db.query(User).all()
-
-    
+    db_user = (
+        db.query(User)
+        .filter(User.email == form_data.username)
+        .first()
+    )
 
     if not db_user:
         raise HTTPException(
@@ -63,7 +65,10 @@ def login(
             detail="Invalid email or password"
         )
 
-    if not verify_password(form_data.password, db_user.password):
+    if not verify_password(
+        form_data.password,
+        db_user.password
+    ):
         raise HTTPException(
             status_code=401,
             detail="Invalid email or password"
@@ -79,14 +84,4 @@ def login(
     return {
         "access_token": access_token,
         "token_type": "bearer"
-    }
-
-@router.get("/me")
-def get_me(current_user: User = Depends(get_current_user)):
-    return {
-        "id": current_user.id,
-        "full_name": current_user.full_name,
-        "email": current_user.email,
-        "role": current_user.role,
-        "created_at": current_user.created_at
     }

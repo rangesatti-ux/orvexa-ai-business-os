@@ -11,11 +11,16 @@ from app.schemas.payroll import (
     PayrollListResponse,
 )
 
+
 router = APIRouter(
     prefix="/payroll",
     tags=["Payroll"]
 )
 
+
+# ===========================
+# Generate Payroll
+# ===========================
 
 @router.post(
     "/",
@@ -26,10 +31,11 @@ def generate_payroll(
     payroll: PayrollCreate,
     db: Session = Depends(get_db)
 ):
-
-    employee = db.query(Employee).filter(
-        Employee.id == payroll.employee_id
-    ).first()
+    employee = (
+        db.query(Employee)
+        .filter(Employee.id == payroll.employee_id)
+        .first()
+    )
 
     if not employee:
         raise HTTPException(
@@ -37,10 +43,14 @@ def generate_payroll(
             detail="Employee not found"
         )
 
-    existing = db.query(Payroll).filter(
-        Payroll.employee_id == payroll.employee_id,
-        Payroll.month == payroll.month
-    ).first()
+    existing = (
+        db.query(Payroll)
+        .filter(
+            Payroll.employee_id == payroll.employee_id,
+            Payroll.month == payroll.month
+        )
+        .first()
+    )
 
     if existing:
         raise HTTPException(
@@ -56,23 +66,32 @@ def generate_payroll(
         - payroll.deduction
     )
 
-    payroll_record = Payroll(
-        employee_id=payroll.employee_id,
-        month=payroll.month,
-        basic_salary=payroll.basic_salary,
-        hra=payroll.hra,
-        allowance=payroll.allowance,
-        bonus=payroll.bonus,
-        deduction=payroll.deduction,
-        net_salary=net_salary
-    )
+    try:
+        payroll_record = Payroll(
+            employee_id=payroll.employee_id,
+            month=payroll.month,
+            basic_salary=payroll.basic_salary,
+            hra=payroll.hra,
+            allowance=payroll.allowance,
+            bonus=payroll.bonus,
+            deduction=payroll.deduction,
+            net_salary=net_salary
+        )
 
-    db.add(payroll_record)
-    db.commit()
-    db.refresh(payroll_record)
+        db.add(payroll_record)
+        db.commit()
+        db.refresh(payroll_record)
 
-    return payroll_record
+        return payroll_record
 
+    except Exception:
+        db.rollback()
+        raise
+
+
+# ===========================
+# Get Payrolls
+# ===========================
 
 @router.get(
     "/",
@@ -84,10 +103,9 @@ def get_payrolls(
     limit: int = Query(10, ge=1),
     db: Session = Depends(get_db)
 ):
-
     query = db.query(Payroll)
 
-    if employee_id:
+    if employee_id is not None:
         query = query.filter(
             Payroll.employee_id == employee_id
         )
@@ -113,60 +131,14 @@ def get_payrolls(
     }
 
 
-@router.get(
-    "/{payroll_id}",
-    response_model=PayrollResponse
-)
-def get_payroll(
-    payroll_id: int,
-    db: Session = Depends(get_db)
-):
-
-    payroll = db.query(Payroll).filter(
-        Payroll.id == payroll_id
-    ).first()
-
-    if not payroll:
-        raise HTTPException(
-            status_code=404,
-            detail="Payroll not found"
-        )
-
-    return payroll
-
-
-@router.delete(
-    "/{payroll_id}",
-    dependencies=[Depends(require_role("Admin"))]
-)
-def delete_payroll(
-    payroll_id: int,
-    db: Session = Depends(get_db)
-):
-
-    payroll = db.query(Payroll).filter(
-        Payroll.id == payroll_id
-    ).first()
-
-    if not payroll:
-        raise HTTPException(
-            status_code=404,
-            detail="Payroll not found"
-        )
-
-    db.delete(payroll)
-    db.commit()
-
-    return {
-        "message": "Payroll deleted successfully"
-    }
-
+# ===========================
+# Payroll Dashboard
+# ===========================
 
 @router.get("/dashboard/stats")
 def payroll_dashboard(
     db: Session = Depends(get_db)
 ):
-
     payrolls = db.query(Payroll).all()
 
     total_payroll = sum(
@@ -178,3 +150,67 @@ def payroll_dashboard(
         "employees_paid": len(payrolls),
         "total_salary_paid": total_payroll
     }
+
+
+# ===========================
+# Get Payroll By ID
+# ===========================
+
+@router.get(
+    "/{payroll_id}",
+    response_model=PayrollResponse
+)
+def get_payroll(
+    payroll_id: int,
+    db: Session = Depends(get_db)
+):
+    payroll = (
+        db.query(Payroll)
+        .filter(Payroll.id == payroll_id)
+        .first()
+    )
+
+    if not payroll:
+        raise HTTPException(
+            status_code=404,
+            detail="Payroll not found"
+        )
+
+    return payroll
+
+
+# ===========================
+# Delete Payroll
+# ===========================
+
+@router.delete(
+    "/{payroll_id}",
+    dependencies=[Depends(require_role("Admin"))]
+)
+def delete_payroll(
+    payroll_id: int,
+    db: Session = Depends(get_db)
+):
+    payroll = (
+        db.query(Payroll)
+        .filter(Payroll.id == payroll_id)
+        .first()
+    )
+
+    if not payroll:
+        raise HTTPException(
+            status_code=404,
+            detail="Payroll not found"
+        )
+
+    try:
+        db.delete(payroll)
+        db.commit()
+
+        return {
+            "message": "Payroll deleted successfully"
+        }
+
+    except Exception:
+        db.rollback()
+        raise

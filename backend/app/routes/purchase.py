@@ -14,6 +14,7 @@ from app.schemas.purchase import (
     PurchaseListResponse,
 )
 
+
 router = APIRouter(
     prefix="/purchases",
     tags=["Purchases"]
@@ -25,12 +26,20 @@ def generate_purchase_number(db: Session):
 
     count = (
         db.query(Purchase)
-        .filter(Purchase.purchase_number.like(f"PO-{today}-%"))
+        .filter(
+            Purchase.purchase_number.like(
+                f"PO-{today}-%"
+            )
+        )
         .count()
     ) + 1
 
     return f"PO-{today}-{count:03d}"
 
+
+# ===========================
+# Create Purchase
+# ===========================
 
 @router.post(
     "/",
@@ -41,7 +50,6 @@ def create_purchase(
     purchase: PurchaseCreate,
     db: Session = Depends(get_db),
 ):
-
     supplier = (
         db.query(Supplier)
         .filter(Supplier.id == purchase.supplier_id)
@@ -54,11 +62,8 @@ def create_purchase(
             detail="Supplier not found"
         )
 
-    subtotal = 0
-
-    purchase_items = []
-
     try:
+        subtotal = 0
 
         purchase_obj = Purchase(
             purchase_number=generate_purchase_number(db),
@@ -71,7 +76,6 @@ def create_purchase(
         db.flush()
 
         for item in purchase.items:
-
             product = (
                 db.query(Product)
                 .filter(Product.id == item.product_id)
@@ -85,7 +89,6 @@ def create_purchase(
                 )
 
             total = item.quantity * item.price
-
             subtotal += total
 
             product.quantity += item.quantity
@@ -100,8 +103,6 @@ def create_purchase(
 
             db.add(purchase_item)
 
-            purchase_items.append(purchase_item)
-
         grand_total = (
             subtotal
             + (subtotal * purchase.gst / 100)
@@ -112,15 +113,22 @@ def create_purchase(
         purchase_obj.grand_total = grand_total
 
         db.commit()
-
         db.refresh(purchase_obj)
 
         return purchase_obj
+
+    except HTTPException:
+        db.rollback()
+        raise
 
     except Exception:
         db.rollback()
         raise
 
+
+# ===========================
+# Get Purchases
+# ===========================
 
 @router.get(
     "/",
@@ -131,7 +139,6 @@ def get_purchases(
     limit: int = Query(10, ge=1),
     db: Session = Depends(get_db),
 ):
-
     query = db.query(Purchase)
 
     total = query.count()
@@ -155,6 +162,31 @@ def get_purchases(
     }
 
 
+# ===========================
+# Purchase Dashboard
+# ===========================
+
+@router.get("/dashboard/stats")
+def purchase_dashboard(
+    db: Session = Depends(get_db),
+):
+    purchases = db.query(Purchase).all()
+
+    total_amount = sum(
+        purchase.grand_total
+        for purchase in purchases
+    )
+
+    return {
+        "total_purchases": len(purchases),
+        "total_purchase_amount": total_amount,
+    }
+
+
+# ===========================
+# Get Purchase By ID
+# ===========================
+
 @router.get(
     "/{purchase_id}",
     response_model=PurchaseResponse
@@ -163,7 +195,6 @@ def get_purchase(
     purchase_id: int,
     db: Session = Depends(get_db),
 ):
-
     purchase = (
         db.query(Purchase)
         .filter(Purchase.id == purchase_id)
@@ -179,6 +210,10 @@ def get_purchase(
     return purchase
 
 
+# ===========================
+# Delete Purchase
+# ===========================
+
 @router.delete(
     "/{purchase_id}",
     dependencies=[Depends(require_role("Admin"))],
@@ -187,7 +222,6 @@ def delete_purchase(
     purchase_id: int,
     db: Session = Depends(get_db),
 ):
-
     purchase = (
         db.query(Purchase)
         .filter(Purchase.id == purchase_id)
@@ -200,39 +234,24 @@ def delete_purchase(
             detail="Purchase not found"
         )
 
-    for item in purchase.items:
+    try:
+        for item in purchase.items:
+            product = (
+                db.query(Product)
+                .filter(Product.id == item.product_id)
+                .first()
+            )
 
-        product = (
-            db.query(Product)
-            .filter(Product.id == item.product_id)
-            .first()
-        )
+            if product:
+                product.quantity -= item.quantity
 
-        if product:
-            product.quantity -= item.quantity
+        db.delete(purchase)
+        db.commit()
 
-    db.delete(purchase)
+        return {
+            "message": "Purchase deleted successfully"
+        }
 
-    db.commit()
-
-    return {
-        "message": "Purchase deleted successfully"
-    }
-
-
-@router.get("/dashboard/stats")
-def purchase_dashboard(
-    db: Session = Depends(get_db),
-):
-
-    purchases = db.query(Purchase).all()
-
-    total_amount = sum(
-        purchase.grand_total
-        for purchase in purchases
-    )
-
-    return {
-        "total_purchases": len(purchases),
-        "total_purchase_amount": total_amount,
-    }
+    except Exception:
+        db.rollback()
+        raise

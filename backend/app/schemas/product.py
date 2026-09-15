@@ -1,13 +1,14 @@
-from pydantic import BaseModel
 from datetime import datetime
+
+from pydantic import BaseModel, Field
 
 
 class ProductCreate(BaseModel):
     product_code: str
     product_name: str
     category: str
-    quantity: int
-    price: float
+    quantity: int = Field(ge=0)
+    price: float = Field(ge=0)
     supplier: str
 
 
@@ -15,8 +16,8 @@ class ProductUpdate(BaseModel):
     product_code: str
     product_name: str
     category: str
-    quantity: int
-    price: float
+    quantity: int = Field(ge=0)
+    price: float = Field(ge=0)
     supplier: str
 
 
@@ -32,6 +33,7 @@ class ProductResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
 
 class ProductListResponse(BaseModel):
     total: int

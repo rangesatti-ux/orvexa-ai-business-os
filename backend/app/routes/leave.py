@@ -11,11 +11,16 @@ from app.schemas.leave import (
     LeaveResponse,
 )
 
+
 router = APIRouter(
     prefix="/leaves",
     tags=["Leaves"]
 )
 
+
+# ===========================
+# Apply Leave
+# ===========================
 
 @router.post(
     "/",
@@ -26,10 +31,11 @@ def apply_leave(
     request: LeaveCreate,
     db: Session = Depends(get_db)
 ):
-
-    employee = db.query(Employee).filter(
-        Employee.id == request.employee_id
-    ).first()
+    employee = (
+        db.query(Employee)
+        .filter(Employee.id == request.employee_id)
+        .first()
+    )
 
     if not employee:
         raise HTTPException(
@@ -37,21 +43,36 @@ def apply_leave(
             detail="Employee not found"
         )
 
-    leave = Leave(
-        employee_id=request.employee_id,
-        leave_type=request.leave_type,
-        start_date=request.start_date,
-        end_date=request.end_date,
-        reason=request.reason,
-        status="Pending"
-    )
+    if request.end_date < request.start_date:
+        raise HTTPException(
+            status_code=400,
+            detail="End date cannot be before start date"
+        )
 
-    db.add(leave)
-    db.commit()
-    db.refresh(leave)
+    try:
+        leave = Leave(
+            employee_id=request.employee_id,
+            leave_type=request.leave_type,
+            start_date=request.start_date,
+            end_date=request.end_date,
+            reason=request.reason,
+            status="Pending"
+        )
 
-    return leave
+        db.add(leave)
+        db.commit()
+        db.refresh(leave)
 
+        return leave
+
+    except Exception:
+        db.rollback()
+        raise
+
+
+# ===========================
+# Get Leaves
+# ===========================
 
 @router.get(
     "/",
@@ -62,10 +83,9 @@ def get_leaves(
     status: str | None = Query(None),
     db: Session = Depends(get_db)
 ):
-
     query = db.query(Leave)
 
-    if employee_id:
+    if employee_id is not None:
         query = query.filter(
             Leave.employee_id == employee_id
         )
@@ -80,6 +100,46 @@ def get_leaves(
     ).all()
 
 
+# ===========================
+# Leave Dashboard
+# ===========================
+
+@router.get("/dashboard/stats")
+def leave_dashboard(
+    db: Session = Depends(get_db)
+):
+    total = db.query(Leave).count()
+
+    approved = (
+        db.query(Leave)
+        .filter(Leave.status == "Approved")
+        .count()
+    )
+
+    pending = (
+        db.query(Leave)
+        .filter(Leave.status == "Pending")
+        .count()
+    )
+
+    rejected = (
+        db.query(Leave)
+        .filter(Leave.status == "Rejected")
+        .count()
+    )
+
+    return {
+        "total_requests": total,
+        "approved": approved,
+        "pending": pending,
+        "rejected": rejected
+    }
+
+
+# ===========================
+# Get Leave By ID
+# ===========================
+
 @router.get(
     "/{leave_id}",
     response_model=LeaveResponse
@@ -88,10 +148,11 @@ def get_leave(
     leave_id: int,
     db: Session = Depends(get_db)
 ):
-
-    leave = db.query(Leave).filter(
-        Leave.id == leave_id
-    ).first()
+    leave = (
+        db.query(Leave)
+        .filter(Leave.id == leave_id)
+        .first()
+    )
 
     if not leave:
         raise HTTPException(
@@ -101,6 +162,10 @@ def get_leave(
 
     return leave
 
+
+# ===========================
+# Update Leave Status
+# ===========================
 
 @router.put(
     "/{leave_id}/status",
@@ -112,10 +177,11 @@ def update_leave_status(
     request: LeaveStatusUpdate,
     db: Session = Depends(get_db)
 ):
-
-    leave = db.query(Leave).filter(
-        Leave.id == leave_id
-    ).first()
+    leave = (
+        db.query(Leave)
+        .filter(Leave.id == leave_id)
+        .first()
+    )
 
     if not leave:
         raise HTTPException(
@@ -133,13 +199,22 @@ def update_leave_status(
             detail="Invalid status"
         )
 
-    leave.status = request.status
+    try:
+        leave.status = request.status
 
-    db.commit()
-    db.refresh(leave)
+        db.commit()
+        db.refresh(leave)
 
-    return leave
+        return leave
 
+    except Exception:
+        db.rollback()
+        raise
+
+
+# ===========================
+# Delete Leave
+# ===========================
 
 @router.delete(
     "/{leave_id}",
@@ -149,10 +224,11 @@ def delete_leave(
     leave_id: int,
     db: Session = Depends(get_db)
 ):
-
-    leave = db.query(Leave).filter(
-        Leave.id == leave_id
-    ).first()
+    leave = (
+        db.query(Leave)
+        .filter(Leave.id == leave_id)
+        .first()
+    )
 
     if not leave:
         raise HTTPException(
@@ -160,37 +236,14 @@ def delete_leave(
             detail="Leave request not found"
         )
 
-    db.delete(leave)
+    try:
+        db.delete(leave)
+        db.commit()
 
-    db.commit()
+        return {
+            "message": "Leave request deleted successfully"
+        }
 
-    return {
-        "message": "Leave request deleted successfully"
-    }
-
-
-@router.get("/dashboard/stats")
-def leave_dashboard(
-    db: Session = Depends(get_db)
-):
-
-    total = db.query(Leave).count()
-
-    approved = db.query(Leave).filter(
-        Leave.status == "Approved"
-    ).count()
-
-    pending = db.query(Leave).filter(
-        Leave.status == "Pending"
-    ).count()
-
-    rejected = db.query(Leave).filter(
-        Leave.status == "Rejected"
-    ).count()
-
-    return {
-        "total_requests": total,
-        "approved": approved,
-        "pending": pending,
-        "rejected": rejected
-    }
+    except Exception:
+        db.rollback()
+        raise

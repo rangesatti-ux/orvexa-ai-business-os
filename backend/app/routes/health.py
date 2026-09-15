@@ -3,7 +3,10 @@ from sqlalchemy import text
 
 from app.database.connection import SessionLocal
 
-router = APIRouter(tags=["Health"])
+
+router = APIRouter(
+    tags=["Health"],
+)
 
 
 @router.get("/health")
@@ -16,14 +19,14 @@ def health_check():
         return {
             "status": "healthy",
             "database": "connected",
-            "version": "1.0.0"
+            "version": "1.0.0",
         }
 
     except Exception:
         return {
             "status": "unhealthy",
             "database": "disconnected",
-            "version": "1.0.0"
+            "version": "1.0.0",
         }
 
     finally:

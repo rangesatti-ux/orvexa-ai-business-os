@@ -5,7 +5,7 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
-from app.database.connection import Base
+from app.database.base import Base
 from app.models.user import User
 from app.models.employee import Employee
 from app.models.product import Product
@@ -28,10 +28,13 @@ config = context.config
 # Allow overriding the sqlalchemy URL from the environment in CI
 # First prefer an explicit environment variable, then the project's settings
 env_database_url = os.getenv("DATABASE_URL")
-if env_database_url:
-    config.set_main_option("sqlalchemy.url", env_database_url)
-else:
-    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+
+database_url = env_database_url or settings.DATABASE_URL
+
+config.set_main_option(
+    "sqlalchemy.url",
+    database_url.replace("%", "%%")
+)
 
 
 # Interpret the config file for Python logging.
