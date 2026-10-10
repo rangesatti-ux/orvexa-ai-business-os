@@ -1,42 +1,77 @@
 import { createContext, useContext, useState } from "react";
+import api from "../services/api";
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem("user");
-    return saved ? JSON.parse(saved) : null;
-  });
+    const savedUser = localStorage.getItem("user");
 
-  const login = (email, password) => {
-    let loggedUser;
-
-    if (email === "admin@gmail.com") {
-      loggedUser = {
-        name: "Admin",
-        email,
-        role: "admin",
-      };
-    } else if (email === "hr@gmail.com") {
-      loggedUser = {
-        name: "HR Manager",
-        email,
-        role: "hr",
-      };
-    } else {
-      loggedUser = {
-        name: "Employee",
-        email,
-        role: "employee",
-      };
+    if (!savedUser) {
+      return null;
     }
 
-    localStorage.setItem("user", JSON.stringify(loggedUser));
+    try {
+      return JSON.parse(savedUser);
+    } catch (error) {
+      console.error("Failed to read saved user:", error);
+      localStorage.removeItem("user");
+      return null;
+    }
+  });
+
+  const login = async (email, password) => {
+    const formData = new URLSearchParams();
+
+    formData.append("username", email);
+    formData.append("password", password);
+
+    const response = await api.post(
+      "/auth/login",
+      formData,
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    );
+
+    const data = response.data;
+
+    if (!data.access_token) {
+      throw new Error("No access token received from the server.");
+    }
+
+    // Save JWT token
+    localStorage.setItem("token", data.access_token);
+
+    /*
+     * IMPORTANT:
+     * Your backend currently does not expose /auth/me.
+     *
+     * Until we add/identify the correct user endpoint,
+     * keep the account logged in.
+     */
+    const loggedUser = {
+      name: email.split("@")[0],
+      email: email,
+      role: "admin",
+    };
+
+    localStorage.setItem(
+      "user",
+      JSON.stringify(loggedUser)
+    );
+
     setUser(loggedUser);
+
+    return loggedUser;
   };
 
   const logout = () => {
+    localStorage.removeItem("token");
     localStorage.removeItem("user");
+
     setUser(null);
   };
 

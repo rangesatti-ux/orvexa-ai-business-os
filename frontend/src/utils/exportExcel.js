@@ -23,3 +23,5 @@ export const exportToExcel = (data, fileName = "Report") => {
 
   saveAs(blob, `${fileName}.xlsx`);
 };
+
+export default exportToExcel;

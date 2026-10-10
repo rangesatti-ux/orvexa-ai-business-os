@@ -8,18 +8,30 @@ import {
 } from "lucide-react";
 
 import { useNavigate } from "react-router-dom";
+
 import { useAuth } from "../../../context/AuthContext";
 import { useTheme } from "../../../context/ThemeContext";
 
 function TopNavbar() {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+
+  const { user, logout } = useAuth();
+
   const { darkMode, toggleTheme } = useTheme();
 
   const handleLogout = () => {
     logout();
-    navigate("/login");
+    navigate("/login", { replace: true });
   };
+
+  const displayName =
+    user?.name || "User";
+
+  const displayRole =
+    user?.role
+      ? user.role.charAt(0).toUpperCase() +
+        user.role.slice(1)
+      : "User";
 
   return (
     <header className="bg-white dark:bg-slate-900 dark:text-white shadow px-6 py-4 flex items-center justify-between">
@@ -41,10 +53,11 @@ function TopNavbar() {
       {/* Right Side */}
       <div className="flex items-center gap-6">
 
-        {/* Dark Mode Toggle */}
+        {/* Dark Mode */}
         <button
           onClick={toggleTheme}
           className="hover:text-blue-600 transition"
+          aria-label="Toggle dark mode"
         >
           {darkMode ? (
             <Sun size={22} />
@@ -54,7 +67,10 @@ function TopNavbar() {
         </button>
 
         {/* Notifications */}
-        <button className="relative hover:text-blue-600 transition">
+        <button
+          className="relative hover:text-blue-600 transition"
+          aria-label="Notifications"
+        >
           <Bell size={22} />
 
           <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
@@ -71,11 +87,11 @@ function TopNavbar() {
 
           <div>
             <h3 className="font-semibold">
-              Admin
+              {displayName}
             </h3>
 
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Administrator
+              {displayRole}
             </p>
           </div>
         </div>

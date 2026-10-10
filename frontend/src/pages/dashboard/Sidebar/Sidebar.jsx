@@ -1,7 +1,9 @@
 import { NavLink } from "react-router-dom";
+
 import {
   LayoutDashboard,
   Users,
+  UsersRound,
   CalendarCheck,
   Wallet,
   Package,
@@ -14,6 +16,10 @@ import {
   Building2,
   ClipboardList,
   BarChart3,
+  Sparkles,
+  ShoppingCart,
+  Truck,
+  ShoppingBag,
 } from "lucide-react";
 
 import { useAuth } from "../../../context/AuthContext";
@@ -56,6 +62,30 @@ function Sidebar() {
       name: "Inventory",
       path: "/inventory",
       icon: Package,
+      roles: ["admin"],
+    },
+    {
+      name: "Sales",
+      path: "/sales",
+      icon: ShoppingCart,
+      roles: ["admin"],
+    },
+    {
+      name: "Customers",
+      path: "/customers",
+      icon: UsersRound,
+      roles: ["admin"],
+    },
+    {
+      name: "Suppliers",
+      path: "/suppliers",
+      icon: Truck,
+      roles: ["admin"],
+    },
+    {
+      name: "Purchases",
+      path: "/purchases",
+      icon: ShoppingBag,
       roles: ["admin"],
     },
     {
@@ -108,26 +138,59 @@ function Sidebar() {
     },
   ];
 
+  const visibleMenuItems = menuItems.filter((item) =>
+    item.roles.includes(user?.role)
+  );
+
   return (
-    <aside className="w-64 min-h-screen bg-slate-900 text-white shadow-lg flex flex-col">
+    <aside className="w-64 min-w-64 shrink-0 h-screen bg-[#0b1220] text-white flex flex-col border-r border-slate-800">
+      {/* =====================================================
+          BRAND
+      ====================================================== */}
 
-      {/* Logo */}
-      <div className="p-6 border-b border-slate-700">
-        <h1 className="text-3xl font-bold text-blue-400">
-          Orvexa AI
-        </h1>
+      <div className="px-5 py-6 border-b border-slate-800">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <Sparkles
+              size={23}
+              className="text-white"
+            />
+          </div>
 
-        <p className="text-sm text-slate-400">
-          Business Operating System
-        </p>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-white">
+              Orvexa
+              <span className="text-blue-400">
+                AI
+              </span>
+            </h1>
+
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Business Operating System
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 mt-5 px-3">
+      {/* =====================================================
+          NAVIGATION
+      ====================================================== */}
 
-        {menuItems
-          .filter((item) => item.roles.includes(user?.role))
-          .map((item) => {
+      <div className="flex-1 min-h-0 px-3 py-5">
+        <p className="px-3 mb-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">
+          Main Menu
+        </p>
+
+        <nav
+          className="
+            h-full
+            overflow-y-auto
+            pr-1
+            [scrollbar-width:none]
+            [&::-webkit-scrollbar]:hidden
+          "
+        >
+          {visibleMenuItems.map((item) => {
             const Icon = item.icon;
 
             return (
@@ -136,36 +199,94 @@ function Sidebar() {
                 to={item.path}
                 end={item.path === "/"}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-4 py-3 rounded-xl mb-2 transition ${
+                  `
+                  group
+                  relative
+                  flex
+                  items-center
+                  gap-3
+                  px-3.5
+                  py-3
+                  mb-1.5
+                  rounded-xl
+                  text-sm
+                  font-medium
+                  transition-all
+                  duration-200
+                  ${
                     isActive
-                      ? "bg-blue-600 text-white"
-                      : "text-slate-300 hover:bg-slate-800 hover:text-white"
-                  }`
+                      ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
+                      : "text-slate-400 hover:bg-slate-800/80 hover:text-white"
+                  }
+                  `
                 }
               >
-                <Icon size={20} />
-                <span>{item.name}</span>
+                {({ isActive }) => (
+                  <>
+                    {isActive && (
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-7 rounded-r-full bg-white" />
+                    )}
+
+                    <Icon
+                      size={19}
+                      strokeWidth={isActive ? 2.3 : 2}
+                      className={
+                        isActive
+                          ? "text-white"
+                          : "text-slate-400 group-hover:text-blue-400"
+                      }
+                    />
+
+                    <span className="truncate">
+                      {item.name}
+                    </span>
+                  </>
+                )}
               </NavLink>
             );
           })}
-      </nav>
-
-      {/* Logged User */}
-      <div className="border-t border-slate-700 p-4">
-        <p className="text-sm font-semibold">
-          {user?.name}
-        </p>
-
-        <p className="text-xs text-slate-400 uppercase">
-          {user?.role}
-        </p>
+        </nav>
       </div>
 
-      {/* Footer */}
-      <div className="text-center text-xs text-slate-500 p-4">
-        © 2026 Orvexa AI
+      {/* =====================================================
+          USER PROFILE
+      ====================================================== */}
+
+      <div className="px-3 pb-3">
+        <div className="border-t border-slate-800 pt-3">
+          <div className="flex items-center gap-3 rounded-xl bg-slate-800/60 px-3 py-3">
+            <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold uppercase">
+              {user?.name
+                ? user.name.charAt(0).toUpperCase()
+                : "U"}
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-white truncate">
+                {user?.name || "User"}
+              </p>
+
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+
+                <p className="text-[11px] text-slate-400 uppercase tracking-wide">
+                  {user?.role || "User"}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
+      {/* =====================================================
+          FOOTER
+      ====================================================== */}
+
+      <div className="px-4 py-3 border-t border-slate-800 text-center">
+        <p className="text-[10px] text-slate-600">
+          © 2026 Orvexa AI
+        </p>
+      </div>
     </aside>
   );
 }

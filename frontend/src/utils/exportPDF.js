@@ -1,4 +1,4 @@
-import jsPDF from "jspdf";
+import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
 export const exportToPDF = (data, fileName = "Report") => {
@@ -27,3 +27,5 @@ export const exportToPDF = (data, fileName = "Report") => {
 
   doc.save(`${fileName}.pdf`);
 };
+
+export default exportToPDF;

@@ -1,161 +1,121 @@
-import { Pencil, Trash2, FileDown, FileSpreadsheet } from "lucide-react";
-import { exportToPDF } from "../../utils/exportPDF";
-import { exportToExcel } from "../../utils/exportExcel";
+import { Pencil, Trash2 } from "lucide-react";
 
 function TaskTable({ tasks, deleteTask, editTask }) {
-  const handleExportPDF = () => {
-    exportToPDF(tasks, "Task Report");
-  };
-
-  const handleExportExcel = () => {
-    exportToExcel(tasks, "Task_Report");
-  };
-
   return (
-    <div className="bg-white shadow rounded-xl p-6">
-
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-
-        <h2 className="text-2xl font-bold">
-          Task List
-        </h2>
-
-        <div className="flex gap-3">
-
-          <button
-            onClick={handleExportPDF}
-            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
-          >
-            <FileDown size={18} />
-            PDF
-          </button>
-
-          <button
-            onClick={handleExportExcel}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
-          >
-            <FileSpreadsheet size={18} />
-            Excel
-          </button>
-
-        </div>
-
-      </div>
+    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white p-6 shadow dark:border-slate-700 dark:bg-slate-800">
+      <h2 className="mb-6 text-2xl font-bold text-gray-800 dark:text-white">
+        Task List
+      </h2>
 
       <div className="overflow-x-auto">
-
-        <table className="w-full">
-
-          <thead className="bg-gray-100">
-
+        <table className="w-full min-w-[750px]">
+          <thead className="bg-gray-100 dark:bg-slate-900">
             <tr>
-              <th className="p-4 text-left">Task</th>
-              <th className="p-4 text-left">Employee</th>
-              <th className="p-4 text-left">Priority</th>
-              <th className="p-4 text-left">Due Date</th>
-              <th className="p-4 text-left">Status</th>
-              <th className="p-4 text-center">Actions</th>
+              {["Task", "Employee", "Priority", "Due Date", "Status", "Actions"].map(
+                (heading) => (
+                  <th
+                    key={heading}
+                    className="p-4 text-left text-sm font-semibold text-gray-700 dark:text-slate-300"
+                  >
+                    {heading}
+                  </th>
+                )
+              )}
             </tr>
-
           </thead>
 
           <tbody>
-
             {tasks.length === 0 ? (
-
               <tr>
                 <td
-                  colSpan="6"
-                  className="text-center py-8 text-gray-500"
+                  colSpan={6}
+                  className="py-8 text-center text-gray-500 dark:text-slate-400"
                 >
-                  No Tasks Found
+                  No tasks found.
                 </td>
               </tr>
-
             ) : (
-
               tasks.map((task) => (
-
                 <tr
                   key={task.id}
-                  className="border-b hover:bg-gray-50"
+                  className="border-b border-gray-200 hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/40"
                 >
+                  <td className="p-4">
+                    <div className="font-medium text-gray-900 dark:text-white">
+                      {task.title}
+                    </div>
+                    {task.description && (
+                      <p className="mt-1 max-w-xs truncate text-xs text-gray-500 dark:text-slate-400">
+                        {task.description}
+                      </p>
+                    )}
+                  </td>
 
-                  <td className="p-4">{task.title}</td>
-
-                  <td className="p-4">{task.employee}</td>
+                  <td className="p-4 text-gray-700 dark:text-slate-300">
+                    {task.employee || "Unassigned"}
+                  </td>
 
                   <td className="p-4">
-
                     <span
-                      className={`px-3 py-1 rounded-full text-white text-sm ${
+                      className={`rounded-full px-3 py-1 text-sm font-medium ${
                         task.priority === "High"
-                          ? "bg-red-600"
+                          ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
                           : task.priority === "Medium"
-                          ? "bg-yellow-500"
-                          : "bg-green-600"
+                          ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300"
+                          : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
                       }`}
                     >
                       {task.priority}
                     </span>
+                  </td>
 
+                  <td className="p-4 text-gray-700 dark:text-slate-300">
+                    {task.due_date
+                      ? String(task.due_date).slice(0, 10)
+                      : "—"}
                   </td>
 
                   <td className="p-4">
-                    {task.dueDate}
-                  </td>
-
-                  <td className="p-4">
-
                     <span
-                      className={`px-3 py-1 rounded-full text-white text-sm ${
+                      className={`rounded-full px-3 py-1 text-sm font-medium ${
                         task.status === "Completed"
-                          ? "bg-green-600"
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
                           : task.status === "In Progress"
-                          ? "bg-blue-600"
-                          : "bg-yellow-500"
+                          ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                          : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300"
                       }`}
                     >
                       {task.status}
                     </span>
-
                   </td>
 
                   <td className="p-4">
-
-                    <div className="flex justify-center gap-3">
-
+                    <div className="flex justify-center gap-2">
                       <button
+                        type="button"
                         onClick={() => editTask(task)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg"
+                        title="Edit task"
+                        className="rounded-lg bg-blue-600 p-2 text-white hover:bg-blue-700"
                       >
-                        <Pencil size={18} />
+                        <Pencil size={17} />
                       </button>
 
                       <button
+                        type="button"
                         onClick={() => deleteTask(task.id)}
-                        className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-lg"
+                        title="Delete task"
+                        className="rounded-lg bg-red-600 p-2 text-white hover:bg-red-700"
                       >
-                        <Trash2 size={18} />
+                        <Trash2 size={17} />
                       </button>
-
                     </div>
-
                   </td>
-
                 </tr>
-
               ))
-
             )}
-
           </tbody>
-
         </table>
-
       </div>
-
     </div>
   );
 }

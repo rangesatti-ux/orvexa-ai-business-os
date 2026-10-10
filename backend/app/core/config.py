@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     APP_NAME: str = "Orvexa AI Business OS"
     APP_VERSION: str = "1.0.0"
 
+    # AI configuration
+    OPENAI_API_KEY: str = ""
+    GROQ_API_KEY: str = ""
+
     BACKEND_CORS_ORIGINS: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",

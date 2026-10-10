@@ -1,12 +1,13 @@
+
 @import "tailwindcss";
 
-/* Enable class-based dark mode */
 @custom-variant dark (&:where(.dark, .dark *));
 
 html,
 body,
 #root {
   min-height: 100%;
+  margin: 0;
 }
 
 body {
