@@ -1,8 +1,13 @@
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database.base import Base
+
+# Register all models for SQLAlchemy metadata and Alembic.
 from app.models.user import User
+from app.models.department import Department
+from app.models.task import Task
 from app.models.employee import Employee
 from app.models.product import Product
 from app.models.customer import Customer
@@ -18,6 +23,7 @@ from app.models.notification import Notification
 
 from app.core.config import settings
 
+
 engine = create_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,
@@ -26,13 +32,15 @@ engine = create_engine(
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
-    bind=engine
+    bind=engine,
+    expire_on_commit=False,
 )
+
 
 def get_db():
     db = SessionLocal()
+
     try:
         yield db
     finally:
         db.close()
- #Base.metadata.create_all(bind=engine)

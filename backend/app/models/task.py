@@ -1,32 +1,62 @@
-from sqlalchemy import Column, Integer, String, Text, Date, DateTime
+
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Text,
+    Date,
+    DateTime,
+    text,
+)
 from sqlalchemy.sql import func
 
-from app.database.connection import Base
+from app.database.base import Base
 
 
 class Task(Base):
     __tablename__ = "tasks"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
-    title = Column(String(200), nullable=False, index=True)
+    title = Column(
+        String(200),
+        nullable=False,
+        index=True,
+    )
 
-    description = Column(Text, nullable=True)
+    description = Column(
+        Text,
+        nullable=True,
+    )
 
-    employee = Column(String(150), nullable=False, default="Unassigned")
+    employee = Column(
+        String(150),
+        nullable=False,
+        default="Unassigned",
+        server_default="Unassigned",
+    )
 
     priority = Column(
         String(20),
         nullable=False,
         default="Medium",
+        server_default="Medium",
     )
 
-    due_date = Column(Date, nullable=True)
+    due_date = Column(
+        Date,
+        nullable=True,
+    )
 
     status = Column(
         String(30),
         nullable=False,
         default="Pending",
+        server_default="Pending",
     )
 
     created_at = Column(

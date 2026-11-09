@@ -1,14 +1,55 @@
-from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from datetime import datetime
+from typing import Optional, Literal
+
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+)
+
+
+DepartmentStatus = Literal["Active", "Inactive"]
 
 
 class DepartmentBase(BaseModel):
-    department_code: str = Field(..., min_length=1, max_length=50)
-    department_name: str = Field(..., min_length=1, max_length=150)
-    description: str | None = None
-    manager_name: str | None = Field(default=None, max_length=150)
-    status: str = "Active"
+    department_code: str = Field(
+        min_length=1,
+        max_length=50,
+    )
+
+    department_name: str = Field(
+        min_length=1,
+        max_length=150,
+    )
+
+    description: Optional[str] = None
+
+    manager_name: Optional[str] = Field(
+        default=None,
+        max_length=150,
+    )
+
+    status: DepartmentStatus = "Active"
+
+    @field_validator("department_code", "department_name")
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        value = value.strip()
+
+        if not value:
+            raise ValueError("This field cannot be empty.")
+
+        return value
+
+    @field_validator("manager_name")
+    @classmethod
+    def clean_manager_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None:
+            value = value.strip()
+            return value or None
+        return value
 
 
 class DepartmentCreate(DepartmentBase):
@@ -16,26 +57,54 @@ class DepartmentCreate(DepartmentBase):
 
 
 class DepartmentUpdate(BaseModel):
-    department_code: str | None = Field(
+    department_code: Optional[str] = Field(
         default=None,
         min_length=1,
         max_length=50,
     )
-    department_name: str | None = Field(
+
+    department_name: Optional[str] = Field(
         default=None,
         min_length=1,
         max_length=150,
     )
-    description: str | None = None
-    manager_name: str | None = Field(
+
+    description: Optional[str] = None
+
+    manager_name: Optional[str] = Field(
         default=None,
         max_length=150,
     )
-    status: str | None = None
+
+    status: Optional[DepartmentStatus] = None
+
+    @field_validator("department_code", "department_name")
+    @classmethod
+    def validate_optional_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None:
+            value = value.strip()
+
+            if not value:
+                raise ValueError("This field cannot be empty.")
+
+        return value
+
+    @field_validator("manager_name")
+    @classmethod
+    def clean_manager_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None:
+            value = value.strip()
+            return value or None
+        return value
 
 
-class DepartmentResponse(DepartmentBase):
+class DepartmentResponse(BaseModel):
     id: int
+    department_code: str
+    department_name: str
+    description: Optional[str] = None
+    manager_name: Optional[str] = None
+    status: DepartmentStatus
     created_at: datetime
     updated_at: datetime
 

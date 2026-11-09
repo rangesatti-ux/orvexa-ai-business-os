@@ -1,13 +1,35 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime
+
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Text,
+    DateTime,
+    CheckConstraint,
+    Index,
+    text,
+)
 from sqlalchemy.sql import func
 
-from app.database.connection import Base
+from app.database.base import Base
 
 
 class Department(Base):
     __tablename__ = "departments"
 
-    id = Column(Integer, primary_key=True, index=True)
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('Active', 'Inactive')",
+            name="ck_department_status",
+        ),
+        Index("ix_departments_status", "status"),
+    )
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
     department_code = Column(
         String(50),
@@ -36,6 +58,7 @@ class Department(Base):
         String(50),
         nullable=False,
         default="Active",
+        server_default=text("'Active'"),
     )
 
     created_at = Column(

@@ -1,3 +1,4 @@
+
 from sqlalchemy.orm import Session
 
 from app.models.audit_log import AuditLog
@@ -8,7 +9,7 @@ def create_audit_log(
     username: str,
     module: str,
     action: str,
-):
+) -> AuditLog:
     log = AuditLog(
         username=username,
         module=module,
@@ -16,4 +17,4 @@ def create_audit_log(
     )
 
     db.add(log)
-    db.commit()
+    return log
