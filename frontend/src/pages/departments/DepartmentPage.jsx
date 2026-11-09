@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
+import { toast } from "react-toastify";
 
 import api from "../../services/api";
-
 import DepartmentForm from "./DepartmentForm";
 import DepartmentTable from "./DepartmentTable";
 
@@ -19,19 +19,11 @@ function DepartmentPage() {
       setError("");
 
       const response = await api.get("/departments/");
-
-      setDepartments(
-        Array.isArray(response.data)
-          ? response.data
-          : []
-      );
+      setDepartments(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       console.error("Failed to load departments:", err);
-
-      setError(
-        err.response?.data?.detail ||
-          "Failed to load departments."
-      );
+      const msg = err.response?.data?.detail || "Failed to load departments.";
+      setError(typeof msg === "string" ? msg : "Failed to load departments.");
     } finally {
       setLoading(false);
     }
@@ -54,31 +46,27 @@ function DepartmentPage() {
 
         setDepartments((previous) =>
           previous.map((item) =>
-            item.id === editingDepartment.id
-              ? response.data
-              : item
+            item.id === editingDepartment.id ? response.data : item
           )
         );
 
+        toast.success("Department updated successfully.");
         setEditingDepartment(null);
       } else {
-        const response = await api.post(
-          "/departments/",
-          department
-        );
+        const response = await api.post("/departments/", department);
 
-        setDepartments((previous) => [
-          response.data,
-          ...previous,
-        ]);
+        setDepartments((previous) => [response.data, ...previous]);
+        toast.success("Department added successfully.");
       }
     } catch (err) {
       console.error("Failed to save department:", err);
-
-      setError(
-        err.response?.data?.detail ||
-          "Failed to save department."
-      );
+      const detail = err.response?.data?.detail;
+      const message =
+        typeof detail === "string"
+          ? detail
+          : "Failed to save department. Please check inputs.";
+      toast.error(message);
+      setError(message);
     } finally {
       setSaving(false);
     }
@@ -88,14 +76,10 @@ function DepartmentPage() {
     const confirmed = window.confirm(
       "Are you sure you want to delete this department?"
     );
-
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     try {
       setError("");
-
       await api.delete(`/departments/${id}`);
 
       setDepartments((previous) =>
@@ -105,29 +89,25 @@ function DepartmentPage() {
       if (editingDepartment?.id === id) {
         setEditingDepartment(null);
       }
+
+      toast.success("Department deleted successfully.");
     } catch (err) {
       console.error("Failed to delete department:", err);
-
-      setError(
-        err.response?.data?.detail ||
-          "Failed to delete department."
-      );
+      const msg = err.response?.data?.detail || "Failed to delete department.";
+      toast.error(typeof msg === "string" ? msg : "Failed to delete department.");
     }
   };
 
   const activeDepartments = departments.filter(
-    (department) =>
-      department.status?.toLowerCase() === "active"
+    (department) => department.status?.toLowerCase() === "active"
   ).length;
 
   const inactiveDepartments = departments.filter(
-    (department) =>
-      department.status?.toLowerCase() === "inactive"
+    (department) => department.status?.toLowerCase() === "inactive"
   ).length;
 
   const departmentManagers = departments.filter(
-    (department) =>
-      department.manager_name?.trim()
+    (department) => department.manager_name?.trim()
   ).length;
 
   return (
@@ -137,9 +117,8 @@ function DepartmentPage() {
           <h1 className="text-3xl font-bold text-gray-800 dark:text-white">
             Department Management
           </h1>
-
           <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
-            Manage your organization's departments.
+            Manage your organization's departments synced with backend records.
           </p>
         </div>
 
@@ -156,7 +135,6 @@ function DepartmentPage() {
       {error && (
         <div className="flex items-center justify-between gap-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
           <span>{error}</span>
-
           <button
             type="button"
             onClick={() => setError("")}
@@ -167,45 +145,26 @@ function DepartmentPage() {
         </div>
       )}
 
+      {/* Statistics */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl bg-blue-600 p-5 text-white shadow-sm">
-          <p className="text-sm font-medium opacity-90">
-            Total Departments
-          </p>
-
-          <p className="mt-2 text-3xl font-bold">
-            {departments.length}
-          </p>
+          <p className="text-sm font-medium opacity-90">Total Departments</p>
+          <p className="mt-2 text-3xl font-bold">{departments.length}</p>
         </div>
 
         <div className="rounded-2xl bg-green-600 p-5 text-white shadow-sm">
-          <p className="text-sm font-medium opacity-90">
-            Active Departments
-          </p>
-
-          <p className="mt-2 text-3xl font-bold">
-            {activeDepartments}
-          </p>
+          <p className="text-sm font-medium opacity-90">Active Departments</p>
+          <p className="mt-2 text-3xl font-bold">{activeDepartments}</p>
         </div>
 
         <div className="rounded-2xl bg-yellow-500 p-5 text-white shadow-sm">
-          <p className="text-sm font-medium opacity-90">
-            Inactive Departments
-          </p>
-
-          <p className="mt-2 text-3xl font-bold">
-            {inactiveDepartments}
-          </p>
+          <p className="text-sm font-medium opacity-90">Inactive Departments</p>
+          <p className="mt-2 text-3xl font-bold">{inactiveDepartments}</p>
         </div>
 
         <div className="rounded-2xl bg-purple-600 p-5 text-white shadow-sm">
-          <p className="text-sm font-medium opacity-90">
-            Assigned Managers
-          </p>
-
-          <p className="mt-2 text-3xl font-bold">
-            {departmentManagers}
-          </p>
+          <p className="text-sm font-medium opacity-90">Assigned Managers</p>
+          <p className="mt-2 text-3xl font-bold">{departmentManagers}</p>
         </div>
       </div>
 
@@ -213,13 +172,8 @@ function DepartmentPage() {
         saveDepartment={saveDepartment}
         editingDepartment={editingDepartment}
         onCancel={() => setEditingDepartment(null)}
+        saving={saving}
       />
-
-      {saving && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300">
-          Saving department...
-        </div>
-      )}
 
       {loading ? (
         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-sm dark:border-slate-700 dark:bg-slate-800">

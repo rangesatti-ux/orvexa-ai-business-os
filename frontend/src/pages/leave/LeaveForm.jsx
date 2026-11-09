@@ -4,147 +4,202 @@ function LeaveForm({
   saveLeave,
   editingLeave,
   isEditing,
+  employees = [],
+  loadingEmployees = false,
+  submitting = false,
 }) {
   const [formData, setFormData] = useState({
-    employee: "",
-    type: "Sick Leave",
-    from: "",
-    to: "",
+    employee_id: "",
+    leave_type: "Casual",
+    start_date: "",
+    end_date: "",
     reason: "",
-    status: "Pending",
   });
 
   useEffect(() => {
     if (editingLeave) {
       setFormData({
-        employee: editingLeave.employee,
-        type: editingLeave.type,
-        from: editingLeave.from,
-        to: editingLeave.to,
-        reason: editingLeave.reason,
-        status: editingLeave.status,
+        employee_id: editingLeave.employee_id || "",
+        leave_type: editingLeave.leave_type || "Casual",
+        start_date: editingLeave.start_date || "",
+        end_date: editingLeave.end_date || "",
+        reason: editingLeave.reason || "",
       });
+    } else {
+      resetForm();
     }
   }, [editingLeave]);
 
+  const resetForm = () => {
+    setFormData({
+      employee_id: "",
+      leave_type: "Casual",
+      start_date: "",
+      end_date: "",
+      reason: "",
+    });
+  };
+
   const handleChange = (e) => {
+    const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [e.target.name]: e.target.value,
+      [name]: value,
     }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    if (
-      !formData.employee ||
-      !formData.from ||
-      !formData.to
-    ) {
-      alert("Please fill all required fields.");
+    if (!formData.employee_id || !formData.start_date || !formData.end_date) {
+      alert("Please fill in all required fields.");
       return;
     }
 
-    if (formData.from > formData.to) {
-      alert("From Date cannot be later than To Date.");
+    if (formData.start_date > formData.end_date) {
+      alert("Start Date cannot be after End Date.");
       return;
     }
 
-    saveLeave(formData);
+    if (!formData.reason.trim()) {
+      alert("Please enter a reason for the leave request.");
+      return;
+    }
 
-    setFormData({
-      employee: "",
-      type: "Sick Leave",
-      from: "",
-      to: "",
-      reason: "",
-      status: "Pending",
+    saveLeave({
+      ...formData,
+      employee_id: Number(formData.employee_id),
+      reason: formData.reason.trim(),
     });
+
+    if (!isEditing) {
+      resetForm();
+    }
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6">
-
-      <h2 className="text-2xl font-bold mb-6">
-        {isEditing ? "Update Leave" : "Apply Leave"}
+    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm p-6 transition-colors">
+      <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">
+        {isEditing ? "Update Leave Request" : "Apply for Leave"}
       </h2>
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Employee Selector */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+              Employee
+            </label>
+            <select
+              name="employee_id"
+              value={formData.employee_id}
+              onChange={handleChange}
+              disabled={loadingEmployees || submitting || isEditing}
+              className="w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2.5 text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+              required
+            >
+              <option value="">
+                {loadingEmployees ? "Loading employees..." : "Select Employee"}
+              </option>
+              {employees.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.full_name || emp.name} (EMP #{emp.employee_id || emp.id})
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <div className="grid md:grid-cols-2 gap-5">
+          {/* Leave Type */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+              Leave Type
+            </label>
+            <select
+              name="leave_type"
+              value={formData.leave_type}
+              onChange={handleChange}
+              disabled={submitting}
+              className="w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2.5 text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+            >
+              <option value="Casual">Casual</option>
+              <option value="Sick">Sick</option>
+              <option value="Emergency">Emergency</option>
+              <option value="Earned">Earned</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
 
-          <input
-            type="text"
-            name="employee"
-            placeholder="Employee Name"
-            value={formData.employee}
-            onChange={handleChange}
-            className="border rounded-lg p-3"
-            required
-          />
+          {/* Start Date */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+              Start Date
+            </label>
+            <input
+              type="date"
+              name="start_date"
+              value={formData.start_date}
+              onChange={handleChange}
+              disabled={submitting}
+              className="w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2.5 text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+              required
+            />
+          </div>
 
-          <select
-            name="type"
-            value={formData.type}
-            onChange={handleChange}
-            className="border rounded-lg p-3"
-          >
-            <option>Sick Leave</option>
-            <option>Casual Leave</option>
-            <option>Annual Leave</option>
-            <option>Work From Home</option>
-          </select>
+          {/* End Date */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+              End Date
+            </label>
+            <input
+              type="date"
+              name="end_date"
+              min={formData.start_date || undefined}
+              value={formData.end_date}
+              onChange={handleChange}
+              disabled={submitting}
+              className="w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2.5 text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+              required
+            />
+          </div>
 
-          <input
-            type="date"
-            name="from"
-            value={formData.from}
-            onChange={handleChange}
-            className="border rounded-lg p-3"
-            required
-          />
-
-          <input
-            type="date"
-            name="to"
-            value={formData.to}
-            onChange={handleChange}
-            className="border rounded-lg p-3"
-            required
-          />
-
-          <textarea
-            name="reason"
-            rows="3"
-            placeholder="Reason"
-            value={formData.reason}
-            onChange={handleChange}
-            className="border rounded-lg p-3 md:col-span-2"
-          />
-
-          <select
-            name="status"
-            value={formData.status}
-            onChange={handleChange}
-            className="border rounded-lg p-3"
-          >
-            <option>Pending</option>
-            <option>Approved</option>
-            <option>Rejected</option>
-          </select>
-
+          {/* Reason */}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+              Reason
+            </label>
+            <textarea
+              name="reason"
+              rows="3"
+              placeholder="State reason for leave request..."
+              value={formData.reason}
+              onChange={handleChange}
+              disabled={submitting}
+              className="w-full resize-none rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2.5 text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+              required
+            />
+          </div>
         </div>
 
-        <button
-          type="submit"
-          className="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
-        >
-          {isEditing ? "Update Leave" : "Apply Leave"}
-        </button>
+        <div className="flex gap-3 pt-2">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2.5 rounded-lg transition disabled:opacity-50"
+          >
+            {submitting ? "Submitting..." : isEditing ? "Update Leave" : "Submit Leave Request"}
+          </button>
 
+          {isEditing && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="bg-gray-500 hover:bg-gray-600 text-white font-semibold px-6 py-2.5 rounded-lg transition"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
       </form>
-
     </div>
   );
 }

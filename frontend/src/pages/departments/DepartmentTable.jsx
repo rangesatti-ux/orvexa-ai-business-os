@@ -54,7 +54,7 @@ function DepartmentTable({
                   className="border-t border-gray-200 transition hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/40"
                 >
                   <td className="p-4">
-                    <span className="rounded-md bg-gray-100 px-3 py-1 text-sm font-semibold text-gray-700 dark:bg-slate-700 dark:text-slate-200">
+                    <span className="rounded-md bg-gray-100 px-3 py-1 text-sm font-semibold text-gray-700 dark:bg-slate-700 dark:text-slate-200 font-mono">
                       {department.department_code}
                     </span>
                   </td>
@@ -65,32 +65,28 @@ function DepartmentTable({
                     </div>
                   </td>
 
-                  <td className="p-4 text-gray-700 dark:text-slate-300">
+                  <td className="p-4 text-gray-700 dark:text-slate-300 text-sm">
                     {department.manager_name || "Not assigned"}
                   </td>
 
                   <td className="max-w-xs p-4 text-sm text-gray-600 dark:text-slate-400">
                     <div
                       className="truncate"
-                      title={
-                        department.description || ""
-                      }
+                      title={department.description || ""}
                     >
-                      {department.description ||
-                        "No description"}
+                      {department.description || "No description"}
                     </div>
                   </td>
 
                   <td className="p-4">
                     <span
                       className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        department.status?.toLowerCase() ===
-                        "active"
+                        department.status?.toLowerCase() === "active"
                           ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
                           : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
                       }`}
                     >
-                      {department.status}
+                      {department.status || "Active"}
                     </span>
                   </td>
 
@@ -98,20 +94,16 @@ function DepartmentTable({
                     <div className="flex justify-center gap-2">
                       <button
                         type="button"
-                        onClick={() =>
-                          editDepartment(department)
-                        }
+                        onClick={() => editDepartment(department)}
                         title="Edit department"
-                        className="rounded-lg bg-blue-600 p-2 text-white transition hover:bg-blue-700"
+                        className="rounded-lg bg-yellow-500 p-2 text-white transition hover:bg-yellow-600"
                       >
                         <Pencil size={17} />
                       </button>
 
                       <button
                         type="button"
-                        onClick={() =>
-                          deleteDepartment(department.id)
-                        }
+                        onClick={() => deleteDepartment(department.id)}
                         title="Delete department"
                         className="rounded-lg bg-red-600 p-2 text-white transition hover:bg-red-700"
                       >

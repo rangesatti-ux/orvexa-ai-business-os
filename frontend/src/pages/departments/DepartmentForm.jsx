@@ -4,6 +4,7 @@ function DepartmentForm({
   saveDepartment,
   editingDepartment,
   onCancel,
+  saving = false,
 }) {
   const [formData, setFormData] = useState({
     department_code: "",
@@ -16,16 +17,11 @@ function DepartmentForm({
   useEffect(() => {
     if (editingDepartment) {
       setFormData({
-        department_code:
-          editingDepartment.department_code || "",
-        department_name:
-          editingDepartment.department_name || "",
-        description:
-          editingDepartment.description || "",
-        manager_name:
-          editingDepartment.manager_name || "",
-        status:
-          editingDepartment.status || "Active",
+        department_code: editingDepartment.department_code || "",
+        department_name: editingDepartment.department_name || "",
+        description: editingDepartment.description || "",
+        manager_name: editingDepartment.manager_name || "",
+        status: editingDepartment.status || "Active",
       });
     } else {
       setFormData({
@@ -40,7 +36,6 @@ function DepartmentForm({
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-
     setFormData((previous) => ({
       ...previous,
       [name]: value,
@@ -49,7 +44,6 @@ function DepartmentForm({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
     saveDepartment(formData);
   };
 
@@ -60,15 +54,12 @@ function DepartmentForm({
     >
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
-          {editingDepartment
-            ? "Edit Department"
-            : "Add Department"}
+          {editingDepartment ? "Edit Department" : "Add Department"}
         </h2>
-
         <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
           {editingDepartment
             ? "Update the department information."
-            : "Create a new department."}
+            : "Create a new department in the organization."}
         </p>
       </div>
 
@@ -77,16 +68,15 @@ function DepartmentForm({
           <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">
             Department Code
           </label>
-
           <input
             type="text"
             name="department_code"
             placeholder="e.g. IT"
             value={formData.department_code}
             onChange={handleChange}
-            className="w-full rounded-lg border border-gray-300 bg-white p-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:ring-blue-900"
+            className="w-full rounded-lg border border-gray-300 bg-white p-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
             required
-            disabled={Boolean(editingDepartment)}
+            disabled={Boolean(editingDepartment) || saving}
           />
         </div>
 
@@ -94,14 +84,14 @@ function DepartmentForm({
           <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">
             Department Name
           </label>
-
           <input
             type="text"
             name="department_name"
             placeholder="e.g. Information Technology"
             value={formData.department_name}
             onChange={handleChange}
-            className="w-full rounded-lg border border-gray-300 bg-white p-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:ring-blue-900"
+            disabled={saving}
+            className="w-full rounded-lg border border-gray-300 bg-white p-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
             required
           />
         </div>
@@ -110,14 +100,14 @@ function DepartmentForm({
           <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">
             Manager Name
           </label>
-
           <input
             type="text"
             name="manager_name"
             placeholder="e.g. John Smith"
             value={formData.manager_name}
             onChange={handleChange}
-            className="w-full rounded-lg border border-gray-300 bg-white p-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:ring-blue-900"
+            disabled={saving}
+            className="w-full rounded-lg border border-gray-300 bg-white p-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
           />
         </div>
 
@@ -125,11 +115,11 @@ function DepartmentForm({
           <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">
             Status
           </label>
-
           <select
             name="status"
             value={formData.status}
             onChange={handleChange}
+            disabled={saving}
             className="w-full rounded-lg border border-gray-300 bg-white p-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
           >
             <option value="Active">Active</option>
@@ -141,14 +131,14 @@ function DepartmentForm({
           <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">
             Description
           </label>
-
           <textarea
             name="description"
             placeholder="Enter department description"
             value={formData.description}
             onChange={handleChange}
             rows={4}
-            className="w-full resize-none rounded-lg border border-gray-300 bg-white p-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:ring-blue-900"
+            disabled={saving}
+            className="w-full resize-none rounded-lg border border-gray-300 bg-white p-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
           />
         </div>
       </div>
@@ -156,17 +146,17 @@ function DepartmentForm({
       <div className="mt-6 flex gap-3">
         <button
           type="submit"
-          className="rounded-lg bg-blue-600 px-6 py-3 font-medium text-white transition hover:bg-blue-700"
+          disabled={saving}
+          className="rounded-lg bg-blue-600 px-6 py-3 font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
         >
-          {editingDepartment
-            ? "Update Department"
-            : "Add Department"}
+          {saving ? "Saving..." : editingDepartment ? "Update Department" : "Add Department"}
         </button>
 
         {editingDepartment && (
           <button
             type="button"
             onClick={onCancel}
+            disabled={saving}
             className="rounded-lg border border-gray-300 px-6 py-3 font-medium text-gray-700 transition hover:bg-gray-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
           >
             Cancel

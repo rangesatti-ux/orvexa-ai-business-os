@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 
 import DashboardLayout from "./layouts/DashboardLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -6,7 +6,6 @@ import RoleProtectedRoute from "./components/RoleProtectedRoute";
 
 // Auth Pages
 import Login from "./pages/auth/Login";
-import Register from "./pages/auth/Register";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 
 // Dashboard Pages
@@ -37,26 +36,12 @@ function App() {
       {/* =====================================================
           AUTH ROUTES
       ====================================================== */}
-
-      <Route
-        path="/login"
-        element={<Login />}
-      />
-
-      <Route
-        path="/register"
-        element={<Register />}
-      />
-
-      <Route
-        path="/forgot-password"
-        element={<ForgotPassword />}
-      />
+      <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
 
       {/* =====================================================
           PROTECTED APPLICATION ROUTES
       ====================================================== */}
-
       <Route
         element={
           <ProtectedRoute>
@@ -67,42 +52,20 @@ function App() {
         {/* =====================================================
             GENERAL ROUTES
         ====================================================== */}
-
-        <Route
-          path="/"
-          element={<Dashboard />}
-        />
-
-        <Route
-          path="/attendance"
-          element={<AttendancePage />}
-        />
-
-        <Route
-          path="/leave"
-          element={<LeavePage />}
-        />
-
-        <Route
-          path="/profile"
-          element={<ProfilePage />}
-        />
-
-        <Route
-          path="/notifications"
-          element={<NotificationsPage />}
-        />
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/dashboard" element={<Dashboard />} /> {/* Added route for /dashboard */}
+        <Route path="/attendance" element={<AttendancePage />} />
+        <Route path="/leave" element={<LeavePage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
 
         {/* =====================================================
             EMPLOYEES
         ====================================================== */}
-
         <Route
           path="/employees"
           element={
-            <RoleProtectedRoute
-              allowedRoles={["admin", "hr"]}
-            >
+            <RoleProtectedRoute allowedRoles={["admin", "hr"]}>
               <EmployeePage />
             </RoleProtectedRoute>
           }
@@ -111,13 +74,10 @@ function App() {
         {/* =====================================================
             PAYROLL
         ====================================================== */}
-
         <Route
           path="/payroll"
           element={
-            <RoleProtectedRoute
-              allowedRoles={["admin", "hr"]}
-            >
+            <RoleProtectedRoute allowedRoles={["admin", "hr"]}>
               <PayrollPage />
             </RoleProtectedRoute>
           }
@@ -126,13 +86,10 @@ function App() {
         {/* =====================================================
             REPORTS
         ====================================================== */}
-
         <Route
           path="/reports"
           element={
-            <RoleProtectedRoute
-              allowedRoles={["admin", "hr"]}
-            >
+            <RoleProtectedRoute allowedRoles={["admin", "hr"]}>
               <ReportsPage />
             </RoleProtectedRoute>
           }
@@ -141,13 +98,10 @@ function App() {
         {/* =====================================================
             INVENTORY
         ====================================================== */}
-
         <Route
           path="/inventory"
           element={
-            <RoleProtectedRoute
-              allowedRoles={["admin"]}
-            >
+            <RoleProtectedRoute allowedRoles={["admin"]}>
               <InventoryPage />
             </RoleProtectedRoute>
           }
@@ -156,13 +110,10 @@ function App() {
         {/* =====================================================
             SALES
         ====================================================== */}
-
         <Route
           path="/sales"
           element={
-            <RoleProtectedRoute
-              allowedRoles={["admin"]}
-            >
+            <RoleProtectedRoute allowedRoles={["admin"]}>
               <SalesPage />
             </RoleProtectedRoute>
           }
@@ -171,13 +122,10 @@ function App() {
         {/* =====================================================
             CUSTOMERS
         ====================================================== */}
-
         <Route
           path="/customers"
           element={
-            <RoleProtectedRoute
-              allowedRoles={["admin"]}
-            >
+            <RoleProtectedRoute allowedRoles={["admin"]}>
               <CustomerPage />
             </RoleProtectedRoute>
           }
@@ -186,13 +134,10 @@ function App() {
         {/* =====================================================
             SUPPLIERS
         ====================================================== */}
-
         <Route
           path="/suppliers"
           element={
-            <RoleProtectedRoute
-              allowedRoles={["admin"]}
-            >
+            <RoleProtectedRoute allowedRoles={["admin"]}>
               <SupplierPage />
             </RoleProtectedRoute>
           }
@@ -201,13 +146,10 @@ function App() {
         {/* =====================================================
             PURCHASES
         ====================================================== */}
-
         <Route
           path="/purchases"
           element={
-            <RoleProtectedRoute
-              allowedRoles={["admin"]}
-            >
+            <RoleProtectedRoute allowedRoles={["admin"]}>
               <PurchasePage />
             </RoleProtectedRoute>
           }
@@ -216,13 +158,10 @@ function App() {
         {/* =====================================================
             DEPARTMENTS
         ====================================================== */}
-
         <Route
           path="/departments"
           element={
-            <RoleProtectedRoute
-              allowedRoles={["admin"]}
-            >
+            <RoleProtectedRoute allowedRoles={["admin"]}>
               <DepartmentPage />
             </RoleProtectedRoute>
           }
@@ -231,13 +170,10 @@ function App() {
         {/* =====================================================
             ANALYTICS
         ====================================================== */}
-
         <Route
           path="/analytics"
           element={
-            <RoleProtectedRoute
-              allowedRoles={["admin"]}
-            >
+            <RoleProtectedRoute allowedRoles={["admin"]}>
               <AnalyticsPage />
             </RoleProtectedRoute>
           }
@@ -246,13 +182,10 @@ function App() {
         {/* =====================================================
             AI ASSISTANT
         ====================================================== */}
-
         <Route
           path="/assistant"
           element={
-            <RoleProtectedRoute
-              allowedRoles={["admin"]}
-            >
+            <RoleProtectedRoute allowedRoles={["admin"]}>
               <AssistantPage />
             </RoleProtectedRoute>
           }
@@ -261,13 +194,10 @@ function App() {
         {/* =====================================================
             TASKS
         ====================================================== */}
-
         <Route
           path="/tasks"
           element={
-            <RoleProtectedRoute
-              allowedRoles={["admin", "employee"]}
-            >
+            <RoleProtectedRoute allowedRoles={["admin", "employee"]}>
               <TaskPage />
             </RoleProtectedRoute>
           }
@@ -276,13 +206,10 @@ function App() {
         {/* =====================================================
             SETTINGS
         ====================================================== */}
-
         <Route
           path="/settings"
           element={
-            <RoleProtectedRoute
-              allowedRoles={["admin"]}
-            >
+            <RoleProtectedRoute allowedRoles={["admin"]}>
               <Settings />
             </RoleProtectedRoute>
           }

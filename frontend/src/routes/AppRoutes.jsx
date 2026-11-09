@@ -1,5 +1,8 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
+import ProtectedRoute from "../components/ProtectedRoute";
+import RoleProtectedRoute from "../components/RoleProtectedRoute";
+
 import LandingPage from "../pages/landing/LandingPage";
 import Dashboard from "../pages/dashboard/Dashboard";
 import EmployeePage from "../pages/employees/EmployeePage";
@@ -8,7 +11,6 @@ import Payroll from "../pages/Payroll";
 import Inventory from "../pages/inventory";
 import Settings from "../pages/Settings";
 import Login from "../pages/auth/Login";
-import Register from "../pages/auth/Register";
 
 function AppRoutes() {
   return (
@@ -17,15 +19,58 @@ function AppRoutes() {
         {/* Public routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
 
-        {/* Application routes */}
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/employees" element={<EmployeePage />} />
-        <Route path="/attendance" element={<Attendance />} />
-        <Route path="/payroll" element={<Payroll />} />
-        <Route path="/inventory" element={<Inventory />} />
-        <Route path="/settings" element={<Settings />} />
+        {/* Protected Authenticated routes */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/attendance"
+          element={
+            <ProtectedRoute>
+              <Attendance />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Role-Restricted Admin & HR routes */}
+        <Route
+          path="/employees"
+          element={
+            <RoleProtectedRoute allowedRoles={["Admin", "HR", "Manager"]}>
+              <EmployeePage />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
+          path="/payroll"
+          element={
+            <RoleProtectedRoute allowedRoles={["Admin", "HR", "Finance"]}>
+              <Payroll />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
+          path="/inventory"
+          element={
+            <RoleProtectedRoute allowedRoles={["Admin", "Manager"]}>
+              <Inventory />
+            </RoleProtectedRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );

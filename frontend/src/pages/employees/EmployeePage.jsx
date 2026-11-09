@@ -15,7 +15,7 @@ function EmployeePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Load employees from the backend
+  // Load employees from backend
   const fetchEmployees = async () => {
     try {
       setLoading(true);
@@ -26,7 +26,6 @@ function EmployeePage() {
       });
 
       let data = [];
-
       if (Array.isArray(response.data)) {
         data = response.data;
       } else if (Array.isArray(response.data?.employees)) {
@@ -47,6 +46,7 @@ function EmployeePage() {
         department: employee.department || "",
         designation: employee.position || employee.designation || "",
         position: employee.position || employee.designation || "",
+        role: employee.role || "Employee",
         salary: employee.salary ?? 0,
         joining_date: employee.joining_date || "",
         status: employee.status || "active",
@@ -65,7 +65,7 @@ function EmployeePage() {
     fetchEmployees();
   }, []);
 
-  // Add or update an employee
+  // Save (Create or Update) employee
   const saveEmployee = async (employee) => {
     try {
       if (isEditing && editingEmployee) {
@@ -75,24 +75,23 @@ function EmployeePage() {
           phone: employee.phone?.trim(),
           department: employee.department?.trim(),
           position: employee.designation?.trim() || employee.position?.trim(),
+          role: employee.role || "Employee",
           salary: Number(employee.salary) || 0,
           status: editingEmployee.status || "active",
         };
 
-        await api.put(
-          `/employees/${editingEmployee.id}`,
-          updatePayload
-        );
-
+        await api.put(`/employees/${editingEmployee.id}`, updatePayload);
         toast.success("Employee updated successfully.");
       } else {
         const createPayload = {
           employee_id: employee.employee_id?.trim(),
           full_name: employee.name?.trim() || employee.full_name?.trim(),
           email: employee.email?.trim(),
+          password: employee.password,
           phone: employee.phone?.trim(),
           department: employee.department?.trim(),
           position: employee.designation?.trim() || employee.position?.trim(),
+          role: employee.role || "Employee",
           salary: Number(employee.salary) || 0,
           joining_date: employee.joining_date,
         };
@@ -106,18 +105,16 @@ function EmployeePage() {
       await fetchEmployees();
     } catch (err) {
       console.error("Failed to save employee:", err);
-      console.error("Backend error:", err?.response?.data);
+      const detail = err?.response?.data?.detail;
 
-      const message =
-        err?.response?.data?.detail ||
-        "Failed to save employee. Please check the details.";
-
-      if (Array.isArray(message)) {
+      if (Array.isArray(detail)) {
         toast.error(
-          message.map((item) => item?.msg || "Invalid employee details").join(", ")
+          detail.map((item) => item?.msg || "Invalid detail").join(", ")
         );
+      } else if (typeof detail === "string") {
+        toast.error(detail);
       } else {
-        toast.error(String(message));
+        toast.error("Failed to save employee. Please check input values.");
       }
     }
   };
@@ -127,7 +124,6 @@ function EmployeePage() {
     const confirmed = window.confirm(
       "Are you sure you want to delete this employee?"
     );
-
     if (!confirmed) return;
 
     try {
@@ -138,29 +134,21 @@ function EmployeePage() {
       toast.success("Employee deleted successfully.");
     } catch (err) {
       console.error("Failed to delete employee:", err);
-      const message =
-        err?.response?.data?.detail ||
-        "Failed to delete employee.";
-
-      toast.error(
-        Array.isArray(message)
-          ? "Unable to delete employee."
-          : String(message)
-      );
+      const message = err?.response?.data?.detail || "Failed to delete employee.";
+      toast.error(typeof message === "string" ? message : "Unable to delete employee.");
     }
   };
 
-  // Edit an employee
+  // Set up employee editing
   const editEmployee = (employee) => {
     setEditingEmployee(employee);
     setIsEditing(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Search employees
+  // Search filter
   const filteredEmployees = useMemo(() => {
     const query = search.trim().toLowerCase();
-
     if (!query) return employees;
 
     return employees.filter((employee) =>
@@ -172,11 +160,11 @@ function EmployeePage() {
         employee.department,
         employee.designation,
         employee.employee_id,
+        employee.role,
       ].some((value) => value?.toLowerCase().includes(query))
     );
   }, [employees, search]);
 
-  // Dashboard statistics
   const departmentCount = new Set(
     employees.map((employee) => employee.department).filter(Boolean)
   ).size;
@@ -185,13 +173,12 @@ function EmployeePage() {
     employees.map((employee) => employee.designation).filter(Boolean)
   ).size;
 
-  // Export employees
+  // Exports
   const handleExportPDF = () => {
     if (filteredEmployees.length === 0) {
       toast.warning("No employees to export.");
       return;
     }
-
     exportToPDF(filteredEmployees, "Employees");
     toast.success("Employees exported to PDF.");
   };
@@ -201,7 +188,6 @@ function EmployeePage() {
       toast.warning("No employees to export.");
       return;
     }
-
     exportToExcel(filteredEmployees, "Employees");
     toast.success("Employees exported to Excel.");
   };
@@ -213,7 +199,7 @@ function EmployeePage() {
           Employee Management
         </h1>
         <p className="mt-1 text-gray-500 dark:text-gray-400">
-          Manage employees directly from the Orvexa backend.
+          Manage workforce accounts directly synced with the Orvexa backend.
         </p>
       </div>
 
@@ -230,6 +216,7 @@ function EmployeePage() {
         </div>
       )}
 
+      {/* Stats */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <div className="rounded-xl bg-blue-500 p-5 text-white shadow">
           <h3 className="text-sm opacity-90">Total Employees</h3>
@@ -269,7 +256,7 @@ function EmployeePage() {
       <div>
         <input
           type="text"
-          placeholder="Search by name, email, phone, department or designation..."
+          placeholder="Search by name, email, phone, department, designation or employee ID..."
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           className="w-full rounded-lg border border-gray-300 bg-white p-3 text-gray-800 outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
