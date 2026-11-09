@@ -1,4 +1,4 @@
-
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -6,8 +6,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.database.connection import get_db
 from app.dependencies.auth import get_current_user
-from app.dependencies.role import require_role
 from app.models.department import Department
+from app.models.employee import Employee
 from app.models.user import User
 from app.schemas.department import (
     DepartmentCreate,
@@ -15,6 +15,12 @@ from app.schemas.department import (
     DepartmentUpdate,
 )
 from app.services.audit_service import create_audit_log
+
+# Compatibility layer for role dependencies
+try:
+    from app.dependencies.role import require_role
+except ImportError:
+    from app.dependencies.role import require_roles as require_role
 
 
 router = APIRouter(
@@ -46,17 +52,39 @@ def get_department_or_404(
     return department
 
 
+def attach_employee_count(department: Department, db: Session) -> dict:
+    total_count = (
+        db.query(func.count(Employee.id))
+        .filter(Employee.department_id == department.id)
+        .scalar() or 0
+    )
+    
+    return {
+        "id": department.id,
+        "department_code": department.department_code,
+        "department_name": department.department_name,
+        "description": getattr(department, "description", None),
+        "manager_name": getattr(department, "manager_name", None),
+        "manager_id": getattr(department, "manager_id", None),
+        "status": getattr(department, "status", "Active"),
+        "total_employees": total_count,
+        "created_at": getattr(department, "created_at", None),
+        "updated_at": getattr(department, "updated_at", None),
+    }
+
+
 # CREATE DEPARTMENT
 # Admin / HR only
 @router.post(
     "/",
     response_model=DepartmentResponse,
     status_code=status.HTTP_201_CREATED,
+    summary="Create Department",
 )
 def create_department(
     department: DepartmentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("Admin", "HR")),
+    current_user: User = Depends(require_role(["Admin", "HR"] if isinstance(require_role, type) else "HR")),
 ):
     department_code = normalize_department_code(
         department.department_code
@@ -76,13 +104,18 @@ def create_department(
             detail="Department code already exists.",
         )
 
-    new_department = Department(
-        department_code=department_code,
-        department_name=department.department_name.strip(),
-        description=department.description,
-        manager_name=department.manager_name,
-        status=department.status,
-    )
+    create_data = {
+        "department_code": department_code,
+        "department_name": department.department_name.strip(),
+        "description": department.description,
+        "manager_name": department.manager_name,
+        "status": department.status,
+    }
+
+    if hasattr(Department, "manager_id") and department.manager_id is not None:
+        create_data["manager_id"] = department.manager_id
+
+    new_department = Department(**create_data)
 
     try:
         db.add(new_department)
@@ -98,7 +131,7 @@ def create_department(
         db.commit()
         db.refresh(new_department)
 
-        return new_department
+        return attach_employee_count(new_department, db)
 
     except IntegrityError:
         db.rollback()
@@ -117,10 +150,11 @@ def create_department(
 @router.get(
     "/",
     response_model=list[DepartmentResponse],
+    summary="Get All Departments",
 )
 def get_departments(
-    search: str | None = Query(default=None, max_length=150),
-    status_filter: str | None = Query(
+    search: Optional[str] = Query(default=None, max_length=150),
+    status_filter: Optional[str] = Query(
         default=None,
         alias="status",
     ),
@@ -149,12 +183,14 @@ def get_departments(
             Department.status == status_filter
         )
 
-    return (
+    departments = (
         query
         .order_by(Department.department_name.asc())
         .limit(500)
         .all()
     )
+
+    return [attach_employee_count(dept, db) for dept in departments]
 
 
 # GET SINGLE DEPARTMENT
@@ -162,13 +198,15 @@ def get_departments(
 @router.get(
     "/{department_id}",
     response_model=DepartmentResponse,
+    summary="Get Single Department",
 )
 def get_department(
     department_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return get_department_or_404(department_id, db)
+    dept = get_department_or_404(department_id, db)
+    return attach_employee_count(dept, db)
 
 
 # UPDATE DEPARTMENT
@@ -176,12 +214,13 @@ def get_department(
 @router.put(
     "/{department_id}",
     response_model=DepartmentResponse,
+    summary="Update Department",
 )
 def update_department(
     department_id: int,
     department_data: DepartmentUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("Admin", "HR")),
+    current_user: User = Depends(require_role(["Admin", "HR"] if isinstance(require_role, type) else "HR")),
 ):
     department = get_department_or_404(department_id, db)
 
@@ -195,7 +234,7 @@ def update_department(
             detail="No fields provided for update.",
         )
 
-    if "department_code" in update_data:
+    if "department_code" in update_data and update_data["department_code"]:
         department_code = normalize_department_code(
             update_data["department_code"]
         )
@@ -217,7 +256,7 @@ def update_department(
 
         update_data["department_code"] = department_code
 
-    if "department_name" in update_data:
+    if "department_name" in update_data and update_data["department_name"]:
         update_data["department_name"] = (
             update_data["department_name"].strip()
         )
@@ -229,7 +268,8 @@ def update_department(
 
     try:
         for field, value in update_data.items():
-            setattr(department, field, value)
+            if hasattr(department, field):
+                setattr(department, field, value)
 
         create_audit_log(
             db=db,
@@ -241,7 +281,7 @@ def update_department(
         db.commit()
         db.refresh(department)
 
-        return department
+        return attach_employee_count(department, db)
 
     except IntegrityError:
         db.rollback()
@@ -260,11 +300,12 @@ def update_department(
 # Preserves department history and employee references
 @router.delete(
     "/{department_id}",
+    summary="Deactivate Department",
 )
 def deactivate_department(
     department_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("Admin")),
+    current_user: User = Depends(require_role(["Admin"] if isinstance(require_role, type) else "Admin")),
 ):
     department = get_department_or_404(department_id, db)
 

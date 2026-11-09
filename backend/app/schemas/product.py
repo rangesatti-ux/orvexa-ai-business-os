@@ -1,24 +1,25 @@
 from datetime import datetime
+from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProductCreate(BaseModel):
-    product_code: str
-    product_name: str
-    category: str
-    quantity: int = Field(ge=0)
-    price: float = Field(ge=0)
-    supplier: str
+    product_code: str = Field(min_length=1, max_length=50)
+    product_name: str = Field(min_length=1, max_length=150)
+    category: str = Field(min_length=1, max_length=100)
+    quantity: int = Field(default=0, ge=0)
+    price: float = Field(default=0.0, ge=0)
+    supplier: str = Field(min_length=1, max_length=150)
 
 
 class ProductUpdate(BaseModel):
-    product_code: str
-    product_name: str
-    category: str
-    quantity: int = Field(ge=0)
-    price: float = Field(ge=0)
-    supplier: str
+    product_code: Optional[str] = Field(default=None, max_length=50)
+    product_name: Optional[str] = Field(default=None, max_length=150)
+    category: Optional[str] = Field(default=None, max_length=100)
+    quantity: Optional[int] = Field(default=None, ge=0)
+    price: Optional[float] = Field(default=None, ge=0)
+    supplier: Optional[str] = Field(default=None, max_length=150)
 
 
 class ProductResponse(BaseModel):
@@ -31,8 +32,7 @@ class ProductResponse(BaseModel):
     supplier: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProductListResponse(BaseModel):

@@ -1,4 +1,3 @@
-
 from fastapi import (
     APIRouter,
     Depends,
@@ -9,10 +8,10 @@ from fastapi import (
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from typing import Optional
 
 from app.database.connection import get_db
 from app.dependencies.auth import get_current_user
-from app.dependencies.role import require_role
 from app.models.employee import Employee
 from app.models.user import User
 from app.models.department import Department
@@ -24,6 +23,12 @@ from app.schemas.employee import (
 )
 from app.services.audit_service import create_audit_log
 from app.utils.security import hash_password
+
+# Compatibility layer for role dependencies
+try:
+    from app.dependencies.role import require_role
+except ImportError:
+    from app.dependencies.role import require_roles as require_role
 
 
 router = APIRouter(
@@ -630,6 +635,59 @@ def update_employee(
     except Exception:
         db.rollback()
         raise
+
+
+# --------------------------------------------------
+# CONTROLLED MANAGER REASSIGNMENT
+# Admin and HR only
+# --------------------------------------------------
+
+@router.patch(
+    "/{employee_id}/reassign-manager",
+    response_model=EmployeeResponse,
+    summary="Reassign Employee Manager",
+)
+def reassign_manager(
+    employee_id: int,
+    manager_id: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("Admin", "HR")),
+):
+    employee = (
+        db.query(Employee)
+        .filter(Employee.id == employee_id)
+        .first()
+    )
+
+    if not employee:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Employee not found.",
+        )
+
+    if manager_id is not None:
+        validate_manager_assignment(
+            db=db,
+            employee_id=employee.id,
+            manager_id=manager_id,
+        )
+
+    old_manager_id = employee.manager_id
+    employee.manager_id = manager_id
+
+    create_audit_log(
+        db=db,
+        username=current_user.email,
+        module="Employee",
+        action=(
+            f"Reassigned manager for {employee.full_name} from "
+            f"{old_manager_id} to {manager_id}"
+        ),
+    )
+
+    db.commit()
+    db.refresh(employee)
+    return employee
 
 
 # --------------------------------------------------

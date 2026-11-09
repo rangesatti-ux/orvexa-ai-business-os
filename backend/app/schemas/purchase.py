@@ -1,17 +1,18 @@
 from datetime import datetime
-from pydantic import BaseModel, Field
+from typing import Optional
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PurchaseItemCreate(BaseModel):
-    product_id: int
+    product_id: int = Field(gt=0)
     quantity: int = Field(gt=0)
     price: float = Field(gt=0)
 
 
 class PurchaseCreate(BaseModel):
-    supplier_id: int
-    gst: float = 0
-    discount: float = 0
+    supplier_id: int = Field(gt=0)
+    gst: float = Field(default=0.0, ge=0)
+    discount: float = Field(default=0.0, ge=0)
     items: list[PurchaseItemCreate]
 
 
@@ -22,8 +23,7 @@ class PurchaseItemResponse(BaseModel):
     price: float
     total: float
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PurchaseResponse(BaseModel):
@@ -38,8 +38,7 @@ class PurchaseResponse(BaseModel):
     created_at: datetime
     items: list[PurchaseItemResponse]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PurchaseListResponse(BaseModel):

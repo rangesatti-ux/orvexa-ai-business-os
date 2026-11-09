@@ -1,51 +1,51 @@
 from datetime import datetime
-from pydantic import BaseModel, EmailStr
+from typing import Optional
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class SupplierCreate(BaseModel):
-    supplier_code: str
-    supplier_name: str
-    contact_person: str | None = None
-    phone: str
-    email: EmailStr | None = None
-    address: str | None = None
-    city: str | None = None
-    state: str | None = None
-    pincode: str | None = None
-    gst_number: str | None = None
+    supplier_code: str = Field(min_length=1, max_length=50)
+    supplier_name: str = Field(min_length=1, max_length=150)
+    contact_person: Optional[str] = Field(default=None, max_length=150)
+    phone: str = Field(min_length=1, max_length=20)
+    email: Optional[EmailStr] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
+    gst_number: Optional[str] = Field(default=None, max_length=20)
 
 
 class SupplierUpdate(BaseModel):
-    supplier_code: str
-    supplier_name: str
-    contact_person: str | None = None
-    phone: str
-    email: EmailStr | None = None
-    address: str | None = None
-    city: str | None = None
-    state: str | None = None
-    pincode: str | None = None
-    gst_number: str | None = None
-    is_active: bool
+    supplier_code: Optional[str] = Field(default=None, max_length=50)
+    supplier_name: Optional[str] = Field(default=None, max_length=150)
+    contact_person: Optional[str] = Field(default=None, max_length=150)
+    phone: Optional[str] = Field(default=None, max_length=20)
+    email: Optional[EmailStr] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
+    gst_number: Optional[str] = Field(default=None, max_length=20)
+    is_active: Optional[bool] = None
 
 
 class SupplierResponse(BaseModel):
     id: int
     supplier_code: str
     supplier_name: str
-    contact_person: str | None
+    contact_person: Optional[str] = None
     phone: str
-    email: str | None
-    address: str | None
-    city: str | None
-    state: str | None
-    pincode: str | None
-    gst_number: str | None
-    is_active: bool
+    email: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
+    gst_number: Optional[str] = None
+    is_active: bool = True
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SupplierListResponse(BaseModel):

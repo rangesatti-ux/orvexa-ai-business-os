@@ -1,4 +1,3 @@
-
 from datetime import datetime
 from typing import Optional, Literal
 
@@ -30,6 +29,8 @@ class DepartmentBase(BaseModel):
         default=None,
         max_length=150,
     )
+
+    manager_id: Optional[int] = Field(default=None, gt=0)
 
     status: DepartmentStatus = "Active"
 
@@ -76,6 +77,8 @@ class DepartmentUpdate(BaseModel):
         max_length=150,
     )
 
+    manager_id: Optional[int] = Field(default=None, gt=0)
+
     status: Optional[DepartmentStatus] = None
 
     @field_validator("department_code", "department_name")
@@ -104,7 +107,9 @@ class DepartmentResponse(BaseModel):
     department_name: str
     description: Optional[str] = None
     manager_name: Optional[str] = None
+    manager_id: Optional[int] = None
     status: DepartmentStatus
+    total_employees: Optional[int] = 0
     created_at: datetime
     updated_at: datetime
 

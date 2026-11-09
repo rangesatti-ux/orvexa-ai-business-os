@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+from typing import Optional
 
 from fastapi import (
     APIRouter,
@@ -13,6 +15,7 @@ from app.dependencies.auth import get_current_user
 from app.dependencies.role import require_role
 from app.models.employee import Employee
 from app.models.leave import Leave
+from app.models.attendance import Attendance
 from app.models.user import User
 from app.schemas.leave import (
     LeaveCreate,
@@ -44,7 +47,9 @@ def get_my_employee(
             detail="Your employee profile was not found.",
         )
 
-    if employee.status != "Active":
+    is_active = getattr(employee, "is_active", True)
+    emp_status = getattr(employee, "status", "Active")
+    if not is_active or emp_status != "Active":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your employee account is inactive.",
@@ -58,6 +63,7 @@ def get_my_employee(
     "/",
     response_model=LeaveResponse,
     status_code=status.HTTP_201_CREATED,
+    summary="Apply for Leave",
 )
 def apply_leave(
     request: LeaveCreate,
@@ -98,7 +104,9 @@ def apply_leave(
                 detail="Employee not found.",
             )
 
-    if employee.status != "Active":
+    is_active = getattr(employee, "is_active", True)
+    emp_status = getattr(employee, "status", "Active")
+    if not is_active or emp_status != "Active":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cannot apply leave for an inactive employee.",
@@ -161,10 +169,11 @@ def apply_leave(
 @router.get(
     "/",
     response_model=list[LeaveResponse],
+    summary="Get Leave Requests",
 )
 def get_leaves(
-    employee_id: int | None = Query(default=None, gt=0),
-    status_filter: str | None = Query(default=None, alias="status"),
+    employee_id: Optional[int] = Query(default=None, gt=0),
+    status_filter: Optional[str] = Query(default=None, alias="status"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -175,13 +184,30 @@ def get_leaves(
     if role not in {"admin", "hr"}:
         employee = get_my_employee(db, current_user)
 
-        if employee_id is not None and employee_id != employee.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You cannot view another employee's leave requests.",
+        if role == "manager":
+            subordinates = (
+                db.query(Employee.id)
+                .filter(Employee.manager_id == employee.id)
+                .all()
             )
+            allowed_ids = set([employee.id] + [sub.id for sub in subordinates])
 
-        query = query.filter(Leave.employee_id == employee.id)
+            if employee_id is not None:
+                if employee_id not in allowed_ids:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="You cannot view this employee's leave requests.",
+                    )
+                query = query.filter(Leave.employee_id == employee_id)
+            else:
+                query = query.filter(Leave.employee_id.in_(allowed_ids))
+        else:
+            if employee_id is not None and employee_id != employee.id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You cannot view another employee's leave requests.",
+                )
+            query = query.filter(Leave.employee_id == employee.id)
 
     elif employee_id is not None:
         query = query.filter(Leave.employee_id == employee_id)
@@ -208,30 +234,23 @@ def get_leaves(
 # LEAVE DASHBOARD
 @router.get(
     "/dashboard/stats",
-    dependencies=[Depends(require_role("Admin", "HR"))],
+    summary="Get Leave Dashboard Statistics",
 )
 def leave_dashboard(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    role = str(current_user.role or "").strip().casefold()
+    if role not in {"admin", "hr"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dashboard access requires Admin or HR role.",
+        )
+
     total = db.query(Leave).count()
-
-    approved = (
-        db.query(Leave)
-        .filter(Leave.status == "Approved")
-        .count()
-    )
-
-    pending = (
-        db.query(Leave)
-        .filter(Leave.status == "Pending")
-        .count()
-    )
-
-    rejected = (
-        db.query(Leave)
-        .filter(Leave.status == "Rejected")
-        .count()
-    )
+    approved = db.query(Leave).filter(Leave.status == "Approved").count()
+    pending = db.query(Leave).filter(Leave.status == "Pending").count()
+    rejected = db.query(Leave).filter(Leave.status == "Rejected").count()
 
     return {
         "total_requests": total,
@@ -245,6 +264,7 @@ def leave_dashboard(
 @router.get(
     "/{leave_id}",
     response_model=LeaveResponse,
+    summary="Get Single Leave Request",
 )
 def get_leave(
     leave_id: int,
@@ -268,7 +288,19 @@ def get_leave(
     if role not in {"admin", "hr"}:
         employee = get_my_employee(db, current_user)
 
-        if leave.employee_id != employee.id:
+        if role == "manager":
+            subordinates = (
+                db.query(Employee.id)
+                .filter(Employee.manager_id == employee.id)
+                .all()
+            )
+            allowed_ids = set([employee.id] + [sub.id for sub in subordinates])
+            if leave.employee_id not in allowed_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You cannot view this leave request.",
+                )
+        elif leave.employee_id != employee.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You cannot view this leave request.",
@@ -278,9 +310,11 @@ def get_leave(
 
 
 # APPROVE / REJECT LEAVE
+# Admin and HR only
 @router.put(
     "/{leave_id}/status",
     response_model=LeaveResponse,
+    summary="Approve or Reject Leave Request",
 )
 def update_leave_status(
     leave_id: int,
@@ -309,6 +343,38 @@ def update_leave_status(
     try:
         leave.status = request.status
 
+        rejection_note = getattr(request, "rejection_reason", None)
+        if rejection_note and hasattr(leave, "rejection_reason"):
+            leave.rejection_reason = rejection_note
+
+        # Automatic Attendance Synchronization on Approval
+        if request.status == "Approved":
+            current_day = leave.start_date
+            while current_day <= leave.end_date:
+                existing_att = (
+                    db.query(Attendance)
+                    .filter(
+                        Attendance.employee_id == leave.employee_id,
+                        Attendance.attendance_date == current_day,
+                    )
+                    .first()
+                )
+
+                if existing_att:
+                    existing_att.status = "Leave"
+                    existing_att.remarks = f"Approved Leave ({leave.leave_type})"
+                else:
+                    new_att = Attendance(
+                        employee_id=leave.employee_id,
+                        attendance_date=current_day,
+                        status="Leave",
+                        working_hours=0.0,
+                        remarks=f"Approved Leave ({leave.leave_type})",
+                    )
+                    db.add(new_att)
+
+                current_day += timedelta(days=1)
+
         create_audit_log(
             db=db,
             username=current_user.email,
@@ -329,7 +395,7 @@ def update_leave_status(
 # DELETE LEAVE REQUEST
 @router.delete(
     "/{leave_id}",
-    dependencies=[Depends(require_role("Admin"))],
+    summary="Delete Pending Leave Request",
 )
 def delete_leave(
     leave_id: int,
@@ -347,6 +413,16 @@ def delete_leave(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Leave request not found.",
         )
+
+    role = str(current_user.role or "").strip().casefold()
+
+    if role not in {"admin", "hr"}:
+        employee = get_my_employee(db, current_user)
+        if leave.employee_id != employee.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You cannot delete another employee's leave request.",
+            )
 
     if leave.status != "Pending":
         raise HTTPException(

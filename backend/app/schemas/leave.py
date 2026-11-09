@@ -1,4 +1,3 @@
-
 from datetime import date, datetime
 from typing import Optional, Literal
 
@@ -6,7 +5,6 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    EmailStr,
     model_validator,
 )
 
@@ -36,6 +34,7 @@ class LeaveCreate(BaseModel):
 
 class LeaveStatusUpdate(BaseModel):
     status: Literal["Approved", "Rejected"]
+    rejection_reason: Optional[str] = Field(default=None, max_length=255)
 
 
 class LeaveResponse(BaseModel):
@@ -46,6 +45,14 @@ class LeaveResponse(BaseModel):
     end_date: date
     reason: Optional[str] = None
     status: str
-    created_at: datetime
+    rejection_reason: Optional[str] = None
+    created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class LeaveStats(BaseModel):
+    total_requested: int
+    approved: int
+    pending: int
+    rejected: int

@@ -1,9 +1,22 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
+from app.dependencies.auth import get_current_user
+from app.models.employee import Employee
 from app.models.task import Task
-from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
+from app.models.user import User
+from app.schemas.task import TaskCreate, TaskResponse, TaskStatusUpdate, TaskUpdate
+from app.services.audit_service import create_audit_log
+
+# Compatibility layer for role dependencies
+try:
+    from app.dependencies.role import require_role
+except ImportError:
+    from app.dependencies.role import require_roles as require_role
+
 
 router = APIRouter(
     prefix="/tasks",
@@ -11,35 +24,107 @@ router = APIRouter(
 )
 
 
+def get_my_employee(
+    db: Session,
+    current_user: User,
+) -> Optional[Employee]:
+    return (
+        db.query(Employee)
+        .filter(Employee.user_id == current_user.id)
+        .first()
+    )
+
+
+# CREATE TASK
+# Admin, HR, Manager
 @router.post(
     "/",
     response_model=TaskResponse,
     status_code=status.HTTP_201_CREATED,
+    summary="Create Task",
 )
 def create_task(
     task_data: TaskCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["Admin", "HR", "Manager"] if isinstance(require_role, type) else "Manager")),
 ):
-    task = Task(**task_data.model_dump())
+    create_dict = task_data.model_dump()
 
-    db.add(task)
-    db.commit()
-    db.refresh(task)
+    # Link employee profile if assigned_to_id is provided
+    if "assigned_to_id" in create_dict and create_dict["assigned_to_id"]:
+        employee = (
+            db.query(Employee)
+            .filter(Employee.id == create_dict["assigned_to_id"])
+            .first()
+        )
+        if not employee:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Assigned employee profile not found.",
+            )
+        create_dict["employee"] = employee.full_name
 
-    return task
+    # Safely strip fields not mapped in the Task model schema
+    if not hasattr(Task, "assigned_to_id"):
+        create_dict.pop("assigned_to_id", None)
+
+    task = Task(**create_dict)
+
+    try:
+        db.add(task)
+        db.flush()
+
+        create_audit_log(
+            db=db,
+            username=current_user.email,
+            module="Task",
+            action=f"Created task '{task.title}'",
+        )
+
+        db.commit()
+        db.refresh(task)
+
+        return task
+
+    except Exception:
+        db.rollback()
+        raise
 
 
-@router.get("/", response_model=list[TaskResponse])
+# GET ALL TASKS
+@router.get(
+    "/",
+    response_model=list[TaskResponse],
+    summary="Get Tasks",
+)
 def get_tasks(
-    search: str | None = Query(default=None),
-    status_filter: str | None = Query(default=None, alias="status"),
-    priority: str | None = Query(default=None),
+    search: Optional[str] = Query(default=None),
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    priority: Optional[str] = Query(default=None),
+    assigned_to_id: Optional[int] = Query(default=None, gt=0),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    role = str(current_user.role or "").strip().casefold()
     query = db.query(Task)
 
+    if role not in {"admin", "hr", "manager"}:
+        employee = get_my_employee(db, current_user)
+        if employee:
+            if hasattr(Task, "assigned_to_id"):
+                query = query.filter(
+                    (Task.assigned_to_id == employee.id)
+                    | (Task.employee.ilike(f"%{employee.full_name}%"))
+                )
+            else:
+                query = query.filter(Task.employee.ilike(f"%{employee.full_name}%"))
+        else:
+            return []
+    elif assigned_to_id is not None and hasattr(Task, "assigned_to_id"):
+        query = query.filter(Task.assigned_to_id == assigned_to_id)
+
     if search:
-        pattern = f"%{search}%"
+        pattern = f"%{search.strip()}%"
         query = query.filter(
             Task.title.ilike(pattern)
             | Task.employee.ilike(pattern)
@@ -55,9 +140,37 @@ def get_tasks(
     return query.order_by(Task.id.desc()).all()
 
 
-@router.get("/dashboard/stats")
-def get_task_stats(db: Session = Depends(get_db)):
-    tasks = db.query(Task).all()
+# TASK DASHBOARD STATS
+@router.get(
+    "/dashboard/stats",
+    summary="Get Task Statistics",
+)
+def get_task_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    role = str(current_user.role or "").strip().casefold()
+    query = db.query(Task)
+
+    if role not in {"admin", "hr", "manager"}:
+        employee = get_my_employee(db, current_user)
+        if employee:
+            if hasattr(Task, "assigned_to_id"):
+                query = query.filter(
+                    (Task.assigned_to_id == employee.id)
+                    | (Task.employee.ilike(f"%{employee.full_name}%"))
+                )
+            else:
+                query = query.filter(Task.employee.ilike(f"%{employee.full_name}%"))
+        else:
+            return {
+                "total_tasks": 0,
+                "completed": 0,
+                "in_progress": 0,
+                "pending": 0,
+            }
+
+    tasks = query.all()
 
     return {
         "total_tasks": len(tasks),
@@ -67,10 +180,16 @@ def get_task_stats(db: Session = Depends(get_db)):
     }
 
 
-@router.get("/{task_id}", response_model=TaskResponse)
+# GET SINGLE TASK
+@router.get(
+    "/{task_id}",
+    response_model=TaskResponse,
+    summary="Get Single Task",
+)
 def get_task(
     task_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     task = db.query(Task).filter(Task.id == task_id).first()
 
@@ -80,14 +199,37 @@ def get_task(
             detail="Task not found.",
         )
 
+    role = str(current_user.role or "").strip().casefold()
+
+    if role not in {"admin", "hr", "manager"}:
+        employee = get_my_employee(db, current_user)
+        is_assigned = (
+            employee
+            and (
+                (hasattr(task, "assigned_to_id") and task.assigned_to_id == employee.id)
+                or (task.employee and employee.full_name.lower() in task.employee.lower())
+            )
+        )
+        if not is_assigned:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You cannot view this task.",
+            )
+
     return task
 
 
-@router.put("/{task_id}", response_model=TaskResponse)
+# UPDATE TASK
+@router.put(
+    "/{task_id}",
+    response_model=TaskResponse,
+    summary="Update Task",
+)
 def update_task(
     task_id: int,
     task_data: TaskUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     task = db.query(Task).filter(Task.id == task_id).first()
 
@@ -97,19 +239,78 @@ def update_task(
             detail="Task not found.",
         )
 
-    for field, value in task_data.model_dump(exclude_unset=True).items():
-        setattr(task, field, value)
+    role = str(current_user.role or "").strip().casefold()
+    update_dict = task_data.model_dump(exclude_unset=True)
 
-    db.commit()
-    db.refresh(task)
+    if role not in {"admin", "hr", "manager"}:
+        employee = get_my_employee(db, current_user)
+        is_assigned = (
+            employee
+            and (
+                (hasattr(task, "assigned_to_id") and task.assigned_to_id == employee.id)
+                or (task.employee and employee.full_name.lower() in task.employee.lower())
+            )
+        )
+        if not is_assigned:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You cannot update this task.",
+            )
+        
+        non_status_keys = [k for k in update_dict.keys() if k != "status"]
+        if non_status_keys:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Employees can only update task status.",
+            )
 
-    return task
+    if "assigned_to_id" in update_dict and update_dict["assigned_to_id"]:
+        employee = (
+            db.query(Employee)
+            .filter(Employee.id == update_dict["assigned_to_id"])
+            .first()
+        )
+        if not employee:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Assigned employee profile not found.",
+            )
+        update_dict["employee"] = employee.full_name
+
+    if not hasattr(Task, "assigned_to_id"):
+        update_dict.pop("assigned_to_id", None)
+
+    try:
+        for field, value in update_dict.items():
+            if hasattr(task, field):
+                setattr(task, field, value)
+
+        create_audit_log(
+            db=db,
+            username=current_user.email,
+            module="Task",
+            action=f"Updated task #{task.id}",
+        )
+
+        db.commit()
+        db.refresh(task)
+
+        return task
+
+    except Exception:
+        db.rollback()
+        raise
 
 
-@router.delete("/{task_id}")
+# DELETE TASK
+@router.delete(
+    "/{task_id}",
+    summary="Delete Task",
+)
 def delete_task(
     task_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["Admin", "HR", "Manager"] if isinstance(require_role, type) else "Manager")),
 ):
     task = db.query(Task).filter(Task.id == task_id).first()
 
@@ -119,10 +320,22 @@ def delete_task(
             detail="Task not found.",
         )
 
-    db.delete(task)
-    db.commit()
+    try:
+        create_audit_log(
+            db=db,
+            username=current_user.email,
+            module="Task",
+            action=f"Deleted task #{task.id}",
+        )
 
-    return {
-        "message": "Task deleted successfully.",
-        "id": task_id,
-    }
+        db.delete(task)
+        db.commit()
+
+        return {
+            "message": "Task deleted successfully.",
+            "id": task_id,
+        }
+
+    except Exception:
+        db.rollback()
+        raise

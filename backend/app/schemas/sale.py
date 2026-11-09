@@ -1,5 +1,6 @@
-from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # -----------------------------
@@ -7,8 +8,8 @@ from datetime import datetime
 # -----------------------------
 
 class SaleItemCreate(BaseModel):
-    product_id: int
-    quantity: int
+    product_id: int = Field(gt=0)
+    quantity: int = Field(gt=0)
 
 
 class SaleItemResponse(BaseModel):
@@ -18,8 +19,7 @@ class SaleItemResponse(BaseModel):
     price: float
     total: float
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # -----------------------------
@@ -27,12 +27,12 @@ class SaleItemResponse(BaseModel):
 # -----------------------------
 
 class SaleCreate(BaseModel):
-    customer_name: str
-    customer_phone: str
-    customer_email: str
-    payment_method: str
-    discount: float = 0
-    gst: float = 18
+    customer_name: str = Field(min_length=1, max_length=150)
+    customer_phone: Optional[str] = Field(default=None, max_length=20)
+    customer_email: Optional[str] = Field(default=None, max_length=150)
+    payment_method: str = Field(default="Cash", max_length=50)
+    discount: float = Field(default=0.0, ge=0)
+    gst: float = Field(default=18.0, ge=0)
     items: list[SaleItemCreate]
 
 
@@ -41,8 +41,8 @@ class SaleResponse(BaseModel):
     invoice_number: str
 
     customer_name: str
-    customer_phone: str
-    customer_email: str
+    customer_phone: Optional[str] = None
+    customer_email: Optional[str] = None
 
     subtotal: float
     gst: float
@@ -56,8 +56,7 @@ class SaleResponse(BaseModel):
 
     items: list[SaleItemResponse]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # -----------------------------

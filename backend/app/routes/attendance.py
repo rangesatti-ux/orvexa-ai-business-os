@@ -1,5 +1,5 @@
-
 from datetime import date, datetime, timedelta
+from typing import Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import (
@@ -14,7 +14,6 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
 from app.dependencies.auth import get_current_user
-from app.dependencies.role import require_role
 from app.models.attendance import Attendance
 from app.models.employee import Employee
 from app.models.user import User
@@ -24,6 +23,12 @@ from app.schemas.attendance import (
     AttendanceUpdate,
     AttendanceResponse,
 )
+
+# Compatibility helper for role dependencies
+try:
+    from app.dependencies.role import require_role
+except ImportError:
+    from app.dependencies.role import require_roles as require_role
 
 
 router = APIRouter(
@@ -55,7 +60,10 @@ def get_my_employee(
             detail="Your employee profile was not found.",
         )
 
-    if employee.status != "Active":
+    # Validate active status if is_active or status attribute exists
+    is_active = getattr(employee, "is_active", True)
+    emp_status = getattr(employee, "status", "Active")
+    if not is_active or emp_status != "Active":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your employee account is inactive.",
@@ -84,7 +92,7 @@ def calculate_working_hours(
         tzinfo=APP_TIMEZONE,
     )
 
-    # Support overnight shifts.
+    # Support overnight shifts
     if end < start:
         end += timedelta(days=1)
 
@@ -101,7 +109,7 @@ def calculate_working_hours(
 
 # --------------------------------------------------
 # CHECK IN
-# A user can only check in for their own profile.
+# A user can check in for their own profile.
 # --------------------------------------------------
 
 @router.post(
@@ -116,7 +124,9 @@ def check_in(
 ):
     employee = get_my_employee(db, current_user)
 
-    if employee.id != request.employee_id:
+    target_id = request.employee_id or employee.id
+
+    if employee.id != target_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only check in for your own account.",
@@ -135,18 +145,26 @@ def check_in(
     )
 
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Attendance already exists for today.",
-        )
+        if existing.check_in and not existing.check_out:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Already checked in for today.",
+            )
+        if existing.check_out:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Attendance shift already completed today.",
+            )
 
     try:
+        remarks_val = getattr(request, "remarks", None)
         attendance = Attendance(
             employee_id=employee.id,
             attendance_date=today,
             check_in=now.time().replace(tzinfo=None),
             status="Present",
-            working_hours=0,
+            working_hours=0.0,
+            remarks=remarks_val,
         )
 
         db.add(attendance)
@@ -161,7 +179,6 @@ def check_in(
             status_code=status.HTTP_409_CONFLICT,
             detail="Attendance already exists for today.",
         )
-
     except Exception:
         db.rollback()
         raise
@@ -169,7 +186,7 @@ def check_in(
 
 # --------------------------------------------------
 # CHECK OUT
-# A user can only check out their own attendance.
+# A user can check out their own attendance.
 # --------------------------------------------------
 
 @router.post(
@@ -183,7 +200,9 @@ def check_out(
 ):
     employee = get_my_employee(db, current_user)
 
-    if employee.id != request.employee_id:
+    target_id = request.employee_id or employee.id
+
+    if employee.id != target_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only check out your own account.",
@@ -222,6 +241,10 @@ def check_out(
             checkout_time,
         )
 
+        remarks_val = getattr(request, "remarks", None)
+        if remarks_val:
+            attendance.remarks = remarks_val
+
         db.commit()
         db.refresh(attendance)
 
@@ -235,8 +258,8 @@ def check_out(
 # --------------------------------------------------
 # GET ATTENDANCE
 # Admin / HR: all records
+# Manager: own records + direct team subordinates
 # Employee: own records
-# Manager: own records until team assignment is added
 # --------------------------------------------------
 
 @router.get(
@@ -244,41 +267,50 @@ def check_out(
     response_model=list[AttendanceResponse],
 )
 def get_attendance(
-    employee_id: int | None = Query(default=None, gt=0),
-    attendance_date: date | None = Query(default=None),
+    employee_id: Optional[int] = Query(default=None, gt=0),
+    attendance_date: Optional[date] = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     role = str(current_user.role or "").strip().casefold()
-
     query = db.query(Attendance)
 
     if role not in {"admin", "hr"}:
         employee = get_my_employee(db, current_user)
 
-        if employee_id is not None and employee_id != employee.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You cannot view another employee's attendance.",
+        if role == "manager":
+            subordinates = (
+                db.query(Employee.id)
+                .filter(Employee.manager_id == employee.id)
+                .all()
             )
+            allowed_ids = set([employee.id] + [sub.id for sub in subordinates])
 
-        query = query.filter(
-            Attendance.employee_id == employee.id
-        )
+            if employee_id is not None:
+                if employee_id not in allowed_ids:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="You cannot view this employee's attendance.",
+                    )
+                query = query.filter(Attendance.employee_id == employee_id)
+            else:
+                query = query.filter(Attendance.employee_id.in_(allowed_ids))
+        else:
+            if employee_id is not None and employee_id != employee.id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You cannot view another employee's attendance.",
+                )
+            query = query.filter(Attendance.employee_id == employee.id)
 
     elif employee_id is not None:
-        query = query.filter(
-            Attendance.employee_id == employee_id
-        )
+        query = query.filter(Attendance.employee_id == employee_id)
 
     if attendance_date:
-        query = query.filter(
-            Attendance.attendance_date == attendance_date
-        )
+        query = query.filter(Attendance.attendance_date == attendance_date)
 
     return (
-        query
-        .order_by(
+        query.order_by(
             Attendance.attendance_date.desc(),
             Attendance.id.desc(),
         )
@@ -288,8 +320,42 @@ def get_attendance(
 
 
 # --------------------------------------------------
+# GET TEAM ATTENDANCE (Manager)
+# --------------------------------------------------
+
+@router.get(
+    "/team",
+    response_model=list[AttendanceResponse],
+    summary="Get Team Attendance",
+)
+def get_team_attendance(
+    target_date: Optional[date] = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    manager_employee = get_my_employee(db, current_user)
+    subordinates = (
+        db.query(Employee.id)
+        .filter(Employee.manager_id == manager_employee.id)
+        .all()
+    )
+    subordinate_ids = [sub.id for sub in subordinates]
+
+    if not subordinate_ids:
+        return []
+
+    query = db.query(Attendance).filter(
+        Attendance.employee_id.in_(subordinate_ids)
+    )
+
+    if target_date:
+        query = query.filter(Attendance.attendance_date == target_date)
+
+    return query.order_by(Attendance.attendance_date.desc()).all()
+
+
+# --------------------------------------------------
 # HR ATTENDANCE CORRECTION
-# HR only
 # --------------------------------------------------
 
 @router.patch(
@@ -301,7 +367,7 @@ def update_attendance(
     attendance_id: int,
     update_data: AttendanceUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("HR")),
+    current_user: User = Depends(require_role(["HR", "Admin"] if isinstance(require_role, type) else "HR")),
 ):
     attendance = (
         db.query(Attendance)
@@ -317,19 +383,13 @@ def update_attendance(
 
     changes = update_data.model_dump(exclude_unset=True)
 
-    if (
-        "check_in" in changes
-        and changes["check_in"] is None
-    ):
+    if "check_in" in changes and changes["check_in"] is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Check-in time cannot be cleared.",
         )
 
-    if (
-        "check_out" in changes
-        and changes["check_out"] is None
-    ):
+    if "check_out" in changes and changes["check_out"] is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Check-out time cannot be cleared.",
@@ -362,34 +422,30 @@ def update_attendance(
 
 @router.get(
     "/dashboard",
-    dependencies=[Depends(require_role("Admin", "HR"))],
 )
 def attendance_dashboard(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    role = str(current_user.role or "").strip().casefold()
+    if role not in {"admin", "hr"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dashboard access requires Admin or HR role.",
+        )
+
     today = get_local_now().date()
 
     today_records = (
         db.query(Attendance)
-        .filter(
-            Attendance.attendance_date == today
-        )
+        .filter(Attendance.attendance_date == today)
         .all()
     )
 
     total_present = len(today_records)
-
-    checked_out = sum(
-        1
-        for record in today_records
-        if record.check_out is not None
-    )
-
+    checked_out = sum(1 for r in today_records if r.check_out is not None)
     currently_working = sum(
-        1
-        for record in today_records
-        if record.check_in is not None
-        and record.check_out is None
+        1 for r in today_records if r.check_in is not None and r.check_out is None
     )
 
     return {

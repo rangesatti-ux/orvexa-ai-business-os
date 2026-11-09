@@ -1,27 +1,28 @@
-from pydantic import BaseModel, EmailStr
 from datetime import datetime
+from typing import Optional
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class CustomerCreate(BaseModel):
-    customer_code: str
-    full_name: str
-    phone: str
-    email: EmailStr | None = None
-    address: str | None = None
-    city: str | None = None
-    state: str | None = None
-    pincode: str | None = None
+    customer_code: str = Field(min_length=1, max_length=50)
+    full_name: str = Field(min_length=1, max_length=150)
+    phone: str = Field(min_length=1, max_length=20)
+    email: Optional[EmailStr] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
 
 
 class CustomerUpdate(BaseModel):
-    customer_code: str
-    full_name: str
-    phone: str
-    email: EmailStr | None = None
-    address: str | None = None
-    city: str | None = None
-    state: str | None = None
-    pincode: str | None = None
+    customer_code: Optional[str] = Field(default=None, max_length=50)
+    full_name: Optional[str] = Field(default=None, max_length=150)
+    phone: Optional[str] = Field(default=None, max_length=20)
+    email: Optional[EmailStr] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
 
 
 class CustomerResponse(BaseModel):
@@ -29,15 +30,14 @@ class CustomerResponse(BaseModel):
     customer_code: str
     full_name: str
     phone: str
-    email: str | None
-    address: str | None
-    city: str | None
-    state: str | None
-    pincode: str | None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CustomerListResponse(BaseModel):
