@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "../../context/AuthContext";
+import { ShieldAlert } from "lucide-react";
 
 function AttendanceForm({
   saveAttendance,
@@ -7,6 +9,14 @@ function AttendanceForm({
   employees = [],
   loadingEmployees = false,
 }) {
+  const { user } = useAuth();
+  const userRole = user?.role ? user.role.toLowerCase() : "employee";
+  
+  const isAdmin = userRole === "admin";
+  const isEmployee = userRole === "employee";
+  const isHr = userRole === "hr";
+  const isPersonalOnly = isEmployee || isHr;
+
   const [formData, setFormData] = useState({
     employee_id: "",
     attendance_date: "",
@@ -15,6 +25,8 @@ function AttendanceForm({
   });
 
   useEffect(() => {
+    if (isAdmin) return;
+
     if (editingAttendance) {
       setFormData({
         employee_id: editingAttendance.employee_id || "",
@@ -22,14 +34,36 @@ function AttendanceForm({
         status: editingAttendance.status || "Present",
         remarks: editingAttendance.remarks || "",
       });
+    } else if (isPersonalOnly && employees.length > 0) {
+      const matchingEmp = employees.find(
+        (emp) =>
+          (emp.email && user?.email && emp.email.toLowerCase() === user.email.toLowerCase()) ||
+          (emp.full_name && user?.name && emp.full_name.toLowerCase() === user.name.toLowerCase()) ||
+          Number(emp.id) === Number(user?.id)
+      );
+      setFormData((prev) => ({
+        ...prev,
+        employee_id: matchingEmp ? matchingEmp.id : employees[0]?.id || "",
+      }));
     } else {
       resetForm();
     }
-  }, [editingAttendance]);
+  }, [editingAttendance, employees, user, isPersonalOnly, isAdmin]);
 
   const resetForm = () => {
+    let defaultEmpId = "";
+    if (isPersonalOnly && employees.length > 0) {
+      const matchingEmp = employees.find(
+        (emp) =>
+          (emp.email && user?.email && emp.email.toLowerCase() === user.email.toLowerCase()) ||
+          (emp.full_name && user?.name && emp.full_name.toLowerCase() === user.name.toLowerCase()) ||
+          Number(emp.id) === Number(user?.id)
+      );
+      defaultEmpId = matchingEmp ? matchingEmp.id : employees[0]?.id || "";
+    }
+
     setFormData({
-      employee_id: "",
+      employee_id: defaultEmpId,
       attendance_date: "",
       status: "Present",
       remarks: "",
@@ -47,6 +81,11 @@ function AttendanceForm({
   const handleSubmit = (e) => {
     e.preventDefault();
 
+    if (isAdmin) {
+      alert("Administrators do not record attendance.");
+      return;
+    }
+
     if (!formData.employee_id || !formData.attendance_date) {
       alert("Please select an employee and date.");
       return;
@@ -62,10 +101,24 @@ function AttendanceForm({
     }
   };
 
+  if (isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-red-200 bg-red-50 p-8 text-center dark:border-red-900/50 dark:bg-red-950/20">
+        <ShieldAlert size={36} className="text-red-500 mb-3" />
+        <h3 className="text-lg font-bold text-gray-800 dark:text-white">
+          Attendance Logging Restricted
+        </h3>
+        <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
+          Administrators are excluded from personal attendance tracking and logs.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm p-6 transition-colors">
       <h2 className="text-xl font-bold mb-6 text-gray-800 dark:text-white">
-        {isEditing ? "Update Attendance Record" : "Manual Attendance Override"}
+        {isEditing ? "Update Attendance Record" : isPersonalOnly ? "Record Personal Attendance" : "Manual Attendance Override"}
       </h2>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -79,7 +132,7 @@ function AttendanceForm({
               name="employee_id"
               value={formData.employee_id}
               onChange={handleChange}
-              disabled={loadingEmployees || isEditing}
+              disabled={loadingEmployees || isEditing || isPersonalOnly}
               className="w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2.5 text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
               required
             >
@@ -92,6 +145,11 @@ function AttendanceForm({
                 </option>
               ))}
             </select>
+            {isPersonalOnly && (
+              <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                You are logging attendance for your own personal record.
+              </p>
+            )}
           </div>
 
           {/* Date */}

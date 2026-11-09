@@ -4,8 +4,15 @@ import { toast } from "react-toastify";
 import api from "../../services/api";
 import DepartmentForm from "./DepartmentForm";
 import DepartmentTable from "./DepartmentTable";
+import { useAuth } from "../../context/AuthContext";
 
 function DepartmentPage() {
+  const { user } = useAuth();
+  const userRole = user?.role ? user.role.toLowerCase() : "employee";
+
+  // Per rules: Only Admin and HR can create/edit/delete departments. Managers & Employees have view-only access.
+  const canManageDepartments = ["admin", "hr"].includes(userRole);
+
   const [departments, setDepartments] = useState([]);
   const [editingDepartment, setEditingDepartment] = useState(null);
 
@@ -34,6 +41,11 @@ function DepartmentPage() {
   }, []);
 
   const saveDepartment = async (department) => {
+    if (!canManageDepartments) {
+      toast.error("Unauthorized: You do not have permission to modify departments.");
+      return;
+    }
+
     try {
       setSaving(true);
       setError("");
@@ -73,6 +85,11 @@ function DepartmentPage() {
   };
 
   const deleteDepartment = async (id) => {
+    if (!canManageDepartments) {
+      toast.error("Unauthorized: You do not have permission to delete departments.");
+      return;
+    }
+
     const confirmed = window.confirm(
       "Are you sure you want to delete this department?"
     );
@@ -118,7 +135,9 @@ function DepartmentPage() {
             Department Management
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
-            Manage your organization's departments synced with backend records.
+            {canManageDepartments
+              ? "Manage your organization's departments synced with backend records."
+              : "View organization departments and roster alignment."}
           </p>
         </div>
 
@@ -168,12 +187,19 @@ function DepartmentPage() {
         </div>
       </div>
 
-      <DepartmentForm
-        saveDepartment={saveDepartment}
-        editingDepartment={editingDepartment}
-        onCancel={() => setEditingDepartment(null)}
-        saving={saving}
-      />
+      {/* Department Form: Restricted to Admin & HR */}
+      {canManageDepartments ? (
+        <DepartmentForm
+          saveDepartment={saveDepartment}
+          editingDepartment={editingDepartment}
+          onCancel={() => setEditingDepartment(null)}
+          saving={saving}
+        />
+      ) : (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">
+          ℹ️ Department creation and modification are restricted to Administrators and HR personnel. You can view the company departments directory below.
+        </div>
+      )}
 
       {loading ? (
         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -184,8 +210,8 @@ function DepartmentPage() {
       ) : (
         <DepartmentTable
           departments={departments}
-          deleteDepartment={deleteDepartment}
-          editDepartment={setEditingDepartment}
+          deleteDepartment={canManageDepartments ? deleteDepartment : undefined}
+          editDepartment={canManageDepartments ? setEditingDepartment : undefined}
         />
       )}
     </div>

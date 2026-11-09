@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "../../context/AuthContext";
 
 function EmployeeForm({
   addEmployee,
   editingEmployee,
   isEditing,
 }) {
+  const { user } = useAuth();
+  const userRole = user?.role ? user.role.toLowerCase() : "employee";
+  
+  // Per rules: Managers cannot add or modify employees (Admin and HR only)
+  const canManageEmployees = ["admin", "hr"].includes(userRole);
+
   const [employeeId, setEmployeeId] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -17,6 +24,8 @@ function EmployeeForm({
   const [joiningDate, setJoiningDate] = useState("");
 
   useEffect(() => {
+    if (!canManageEmployees) return;
+
     if (editingEmployee) {
       setEmployeeId(
         editingEmployee.employee_id || editingEmployee.id || ""
@@ -37,7 +46,7 @@ function EmployeeForm({
     } else {
       resetForm();
     }
-  }, [editingEmployee]);
+  }, [editingEmployee, canManageEmployees]);
 
   const resetForm = () => {
     setEmployeeId("");
@@ -55,6 +64,11 @@ function EmployeeForm({
   const handleSubmit = (event) => {
     event.preventDefault();
 
+    if (!canManageEmployees) {
+      alert("Unauthorized: Managers do not have permission to add or edit employees.");
+      return;
+    }
+
     addEmployee({
       employee_id: employeeId,
       name,
@@ -68,6 +82,10 @@ function EmployeeForm({
       joining_date: joiningDate,
     });
   };
+
+  if (!canManageEmployees) {
+    return null; // Hidden for Managers & Employees
+  }
 
   return (
     <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow transition-colors">

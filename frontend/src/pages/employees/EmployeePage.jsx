@@ -6,8 +6,15 @@ import EmployeeForm from "./EmployeeForm";
 import EmployeesTable from "./EmployeesTable";
 import { exportToPDF } from "../../utils/exportPDF";
 import { exportToExcel } from "../../utils/exportExcel";
+import { useAuth } from "../../context/AuthContext";
 
 function EmployeePage() {
+  const { user } = useAuth();
+  const userRole = user?.role ? user.role.toLowerCase() : "employee";
+  
+  // Per rules: Managers do not have permission to add/create new employees (Admin & HR only)
+  const canManageEmployees = ["admin", "hr"].includes(userRole);
+
   const [employees, setEmployees] = useState([]);
   const [search, setSearch] = useState("");
   const [editingEmployee, setEditingEmployee] = useState(null);
@@ -67,6 +74,11 @@ function EmployeePage() {
 
   // Save (Create or Update) employee
   const saveEmployee = async (employee) => {
+    if (!canManageEmployees) {
+      toast.error("Unauthorized: Managers cannot add or modify employees.");
+      return;
+    }
+
     try {
       if (isEditing && editingEmployee) {
         const updatePayload = {
@@ -121,6 +133,11 @@ function EmployeePage() {
 
   // Delete an employee
   const deleteEmployee = async (id) => {
+    if (!canManageEmployees) {
+      toast.error("Unauthorized: Managers cannot delete employees.");
+      return;
+    }
+
     const confirmed = window.confirm(
       "Are you sure you want to delete this employee?"
     );
@@ -141,6 +158,10 @@ function EmployeePage() {
 
   // Set up employee editing
   const editEmployee = (employee) => {
+    if (!canManageEmployees) {
+      toast.error("Unauthorized: Managers cannot edit employees.");
+      return;
+    }
     setEditingEmployee(employee);
     setIsEditing(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -199,7 +220,9 @@ function EmployeePage() {
           Employee Management
         </h1>
         <p className="mt-1 text-gray-500 dark:text-gray-400">
-          Manage workforce accounts directly synced with the Orvexa backend.
+          {canManageEmployees
+            ? "Manage workforce accounts directly synced with the Orvexa backend."
+            : "View organizational team roster and directory."}
         </p>
       </div>
 
@@ -247,11 +270,18 @@ function EmployeePage() {
         </div>
       </div>
 
-      <EmployeeForm
-        addEmployee={saveEmployee}
-        editingEmployee={editingEmployee}
-        isEditing={isEditing}
-      />
+      {/* Conditional Rendering: EmployeeForm is restricted to Admin & HR */}
+      {canManageEmployees ? (
+        <EmployeeForm
+          addEmployee={saveEmployee}
+          editingEmployee={editingEmployee}
+          isEditing={isEditing}
+        />
+      ) : (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">
+          ℹ️ Employee creation and modification are restricted to Administrators and HR personnel. You can view the company employee directory below.
+        </div>
+      )}
 
       <div>
         <input
@@ -290,8 +320,8 @@ function EmployeePage() {
       ) : (
         <EmployeesTable
           employees={filteredEmployees}
-          deleteEmployee={deleteEmployee}
-          editEmployee={editEmployee}
+          deleteEmployee={canManageEmployees ? deleteEmployee : undefined}
+          editEmployee={canManageEmployees ? editEmployee : undefined}
         />
       )}
     </div>

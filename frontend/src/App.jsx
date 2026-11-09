@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 
 import DashboardLayout from "./layouts/DashboardLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -33,15 +33,11 @@ import PurchasePage from "./pages/purchases/PurchasePage";
 function App() {
   return (
     <Routes>
-      {/* =====================================================
-          AUTH ROUTES
-      ====================================================== */}
+      {/* AUTH ROUTES */}
       <Route path="/login" element={<Login />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
 
-      {/* =====================================================
-          PROTECTED APPLICATION ROUTES
-      ====================================================== */}
+      {/* PROTECTED APPLICATION ROUTES */}
       <Route
         element={
           <ProtectedRoute>
@@ -49,55 +45,54 @@ function App() {
           </ProtectedRoute>
         }
       >
-        {/* =====================================================
-            GENERAL ROUTES
-        ====================================================== */}
+        {/* GENERAL ROUTES */}
         <Route path="/" element={<Dashboard />} />
-        <Route path="/dashboard" element={<Dashboard />} /> {/* Added route for /dashboard */}
-        <Route path="/attendance" element={<AttendancePage />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/leave" element={<LeavePage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
 
-        {/* =====================================================
-            EMPLOYEES
-        ====================================================== */}
+        {/* ATTENDANCE: HR, Manager, Employee only (Admin has no attendance) */}
+        <Route
+          path="/attendance"
+          element={
+            <RoleProtectedRoute allowedRoles={["hr", "manager", "employee"]}>
+              <AttendancePage />
+            </RoleProtectedRoute>
+          }
+        />
+
+        {/* EMPLOYEES */}
         <Route
           path="/employees"
           element={
-            <RoleProtectedRoute allowedRoles={["admin", "hr"]}>
+            <RoleProtectedRoute allowedRoles={["admin", "manager", "hr"]}>
               <EmployeePage />
             </RoleProtectedRoute>
           }
         />
 
-        {/* =====================================================
-            PAYROLL
-        ====================================================== */}
+        {/* PAYROLL: Admin only (HR excluded) */}
         <Route
           path="/payroll"
           element={
-            <RoleProtectedRoute allowedRoles={["admin", "hr"]}>
+            <RoleProtectedRoute allowedRoles={["admin"]}>
               <PayrollPage />
             </RoleProtectedRoute>
           }
         />
 
-        {/* =====================================================
-            REPORTS
-        ====================================================== */}
+        {/* REPORTS */}
         <Route
           path="/reports"
           element={
-            <RoleProtectedRoute allowedRoles={["admin", "hr"]}>
+            <RoleProtectedRoute allowedRoles={["admin", "manager", "hr"]}>
               <ReportsPage />
             </RoleProtectedRoute>
           }
         />
 
-        {/* =====================================================
-            INVENTORY
-        ====================================================== */}
+        {/* INVENTORY */}
         <Route
           path="/inventory"
           element={
@@ -107,9 +102,7 @@ function App() {
           }
         />
 
-        {/* =====================================================
-            SALES
-        ====================================================== */}
+        {/* SALES */}
         <Route
           path="/sales"
           element={
@@ -119,9 +112,7 @@ function App() {
           }
         />
 
-        {/* =====================================================
-            CUSTOMERS
-        ====================================================== */}
+        {/* CUSTOMERS */}
         <Route
           path="/customers"
           element={
@@ -131,9 +122,7 @@ function App() {
           }
         />
 
-        {/* =====================================================
-            SUPPLIERS
-        ====================================================== */}
+        {/* SUPPLIERS */}
         <Route
           path="/suppliers"
           element={
@@ -143,9 +132,7 @@ function App() {
           }
         />
 
-        {/* =====================================================
-            PURCHASES
-        ====================================================== */}
+        {/* PURCHASES */}
         <Route
           path="/purchases"
           element={
@@ -155,57 +142,47 @@ function App() {
           }
         />
 
-        {/* =====================================================
-            DEPARTMENTS
-        ====================================================== */}
+        {/* DEPARTMENTS */}
         <Route
           path="/departments"
           element={
-            <RoleProtectedRoute allowedRoles={["admin"]}>
+            <RoleProtectedRoute allowedRoles={["admin", "hr"]}>
               <DepartmentPage />
             </RoleProtectedRoute>
           }
         />
 
-        {/* =====================================================
-            ANALYTICS
-        ====================================================== */}
+        {/* ANALYTICS */}
         <Route
           path="/analytics"
           element={
-            <RoleProtectedRoute allowedRoles={["admin"]}>
+            <RoleProtectedRoute allowedRoles={["admin", "manager", "hr"]}>
               <AnalyticsPage />
             </RoleProtectedRoute>
           }
         />
 
-        {/* =====================================================
-            AI ASSISTANT
-        ====================================================== */}
+        {/* AI ASSISTANT */}
         <Route
           path="/assistant"
           element={
-            <RoleProtectedRoute allowedRoles={["admin"]}>
+            <RoleProtectedRoute allowedRoles={["admin", "manager", "hr", "employee"]}>
               <AssistantPage />
             </RoleProtectedRoute>
           }
         />
 
-        {/* =====================================================
-            TASKS
-        ====================================================== */}
+        {/* TASKS */}
         <Route
           path="/tasks"
           element={
-            <RoleProtectedRoute allowedRoles={["admin", "employee"]}>
+            <RoleProtectedRoute allowedRoles={["admin", "manager", "employee"]}>
               <TaskPage />
             </RoleProtectedRoute>
           }
         />
 
-        {/* =====================================================
-            SETTINGS
-        ====================================================== */}
+        {/* SETTINGS: Admin only (HR excluded) */}
         <Route
           path="/settings"
           element={

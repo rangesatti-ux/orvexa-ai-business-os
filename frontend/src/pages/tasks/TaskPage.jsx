@@ -2,12 +2,19 @@ import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 
 import api from "../../services/api";
+import { useAuth } from "../../context/AuthContext"; // Import useAuth to get role
 import TaskForm from "./TaskForm";
 import TaskTable from "./TaskTable";
 import { exportToPDF } from "../../utils/exportPDF";
 import { exportToExcel } from "../../utils/exportExcel";
 
 function TaskPage() {
+  const { user } = useAuth(); // Retrieve current logged-in user and role
+  const userRole = user?.role ? user.role.toLowerCase() : "employee";
+  
+  // Check if current user is allowed to create or edit tasks (Admin or Manager only)
+  const canManageTasks = ["admin", "manager"].includes(userRole);
+
   const [tasks, setTasks] = useState([]);
   const [search, setSearch] = useState("");
   const [editingTask, setEditingTask] = useState(null);
@@ -21,7 +28,19 @@ function TaskPage() {
       setError("");
 
       const response = await api.get("/tasks/");
-      setTasks(Array.isArray(response.data) ? response.data : []);
+      let fetchedTasks = Array.isArray(response.data) ? response.data : [];
+
+      // If user is an employee, optionally filter to only show tasks assigned to them 
+      // (assuming response contains an employee name or ID field matching user)
+      if (userRole === "employee" && user?.name) {
+        fetchedTasks = fetchedTasks.filter(
+          (task) =>
+            task.employee?.toLowerCase() === user.name.toLowerCase() ||
+            task.assigned_to?.toLowerCase() === user.name.toLowerCase()
+        );
+      }
+
+      setTasks(fetchedTasks);
     } catch (err) {
       setError(err.response?.data?.detail || "Failed to load tasks.");
     } finally {
@@ -31,9 +50,14 @@ function TaskPage() {
 
   useEffect(() => {
     loadTasks();
-  }, []);
+  }, [user]);
 
   const saveTask = async (taskData) => {
+    if (!canManageTasks) {
+      toast.error("Unauthorized: Employees cannot create or modify tasks.");
+      return;
+    }
+
     try {
       setSaving(true);
       setError("");
@@ -82,6 +106,11 @@ function TaskPage() {
   };
 
   const deleteTask = async (id) => {
+    if (!canManageTasks) {
+      toast.error("Unauthorized: Employees cannot delete tasks.");
+      return;
+    }
+
     if (!window.confirm("Delete this task?")) return;
 
     try {
@@ -122,7 +151,9 @@ function TaskPage() {
             Task Management
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
-            Create, assign, and track tasks.
+            {canManageTasks
+              ? "Create, assign, and track tasks."
+              : "View and track your assigned tasks."}
           </p>
         </div>
 
@@ -177,11 +208,18 @@ function TaskPage() {
         className="w-full rounded-lg border bg-white p-3 text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white md:w-96"
       />
 
-      <TaskForm
-        saveTask={saveTask}
-        editingTask={editingTask}
-        isEditing={Boolean(editingTask)}
-      />
+      {/* CONDITIONAL RENDERING: Only render TaskForm if user is Admin or Manager */}
+      {canManageTasks ? (
+        <TaskForm
+          saveTask={saveTask}
+          editingTask={editingTask}
+          isEditing={Boolean(editingTask)}
+        />
+      ) : (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">
+          ℹ️ Task creation and modification are restricted to Managers and Administrators. You can view your assigned tasks below.
+        </div>
+      )}
 
       {saving && (
         <p className="text-sm text-blue-600 dark:text-blue-400">
@@ -196,8 +234,8 @@ function TaskPage() {
       ) : (
         <TaskTable
           tasks={filteredTasks}
-          deleteTask={deleteTask}
-          editTask={setEditingTask}
+          deleteTask={canManageTasks ? deleteTask : undefined} // Disable delete function passed to table for employees
+          editTask={canManageTasks ? setEditingTask : undefined} // Disable edit function passed to table for employees
         />
       )}
     </div>

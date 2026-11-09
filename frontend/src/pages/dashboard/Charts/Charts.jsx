@@ -12,28 +12,37 @@ import {
   Cell,
   Legend,
 } from "recharts";
+import { ShieldAlert } from "lucide-react";
 
 import api from "../../../services/api";
+import { useAuth } from "../../../context/AuthContext";
 
 function Charts() {
+  const { user } = useAuth();
+  const userRole = user?.role ? user.role.toLowerCase() : "employee";
+
+  // Per rules: Financial overview & business analytics are restricted to Admin and HR roles only.
+  const canViewAnalytics = ["admin", "hr"].includes(userRole);
+
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!canViewAnalytics) {
+      setLoading(false);
+      return;
+    }
+
     const fetchAnalytics = async () => {
       try {
         setLoading(true);
         setError("");
 
         const response = await api.get("/analytics/dashboard");
-
-        console.log("Analytics dashboard:", response.data);
-
         setAnalytics(response.data || {});
       } catch (err) {
         console.error("Failed to load analytics:", err);
-
         setError("Unable to load business analytics.");
       } finally {
         setLoading(false);
@@ -41,16 +50,30 @@ function Charts() {
     };
 
     fetchAnalytics();
-  }, []);
+  }, [canViewAnalytics]);
+
+  // If user role does not have permission, show security restriction notice
+  if (!canViewAnalytics) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 p-10 text-center dark:border-amber-900/40 dark:bg-amber-950/20">
+        <ShieldAlert size={42} className="text-amber-500 mb-3" />
+        <h3 className="text-lg font-bold text-gray-800 dark:text-white">
+          Analytics Restricted
+        </h3>
+        <p className="mt-1 text-sm text-gray-600 dark:text-slate-400 max-w-md">
+          Financial overviews and organization-wide analytics are restricted to Administrators and HR personnel.
+        </p>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-5">
           <h2 className="text-xl font-bold text-gray-800 dark:text-white">
-            Business Overview
+            Financial Overview
           </h2>
-
           <div className="h-[300px] flex items-center justify-center text-gray-500 dark:text-gray-400">
             Loading analytics...
           </div>
@@ -60,7 +83,6 @@ function Charts() {
           <h2 className="text-xl font-bold text-gray-800 dark:text-white">
             Business Distribution
           </h2>
-
           <div className="h-[300px] flex items-center justify-center text-gray-500 dark:text-gray-400">
             Loading analytics...
           </div>
@@ -142,7 +164,6 @@ function Charts() {
           <h2 className="text-xl font-bold text-gray-800 dark:text-white">
             Financial Overview
           </h2>
-
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Real-time financial data from Orvexa
           </p>
@@ -154,22 +175,18 @@ function Charts() {
               strokeDasharray="3 3"
               stroke="#d1d5db"
             />
-
             <XAxis
               dataKey="name"
               stroke="#6b7280"
             />
-
             <YAxis
               stroke="#6b7280"
             />
-
             <Tooltip
               formatter={(value) =>
                 `₹${Number(value).toLocaleString("en-IN")}`
               }
             />
-
             <Bar
               dataKey="value"
               fill="#3b82f6"
@@ -185,7 +202,6 @@ function Charts() {
           <h2 className="text-xl font-bold text-gray-800 dark:text-white">
             Business Overview
           </h2>
-
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Employees, customers, products and transactions
           </p>
@@ -207,9 +223,7 @@ function Charts() {
                 />
               ))}
             </Pie>
-
             <Tooltip />
-
             <Legend />
           </PieChart>
         </ResponsiveContainer>

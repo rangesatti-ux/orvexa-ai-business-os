@@ -1,8 +1,16 @@
+import { useAuth } from "../../context/AuthContext";
+
 function EmployeesTable({
   employees,
   deleteEmployee,
   editEmployee,
 }) {
+  const { user } = useAuth();
+  const userRole = user?.role ? user.role.toLowerCase() : "employee";
+  
+  // Per rules: Managers cannot edit or delete employees (Admin and HR only)
+  const canManageEmployees = ["admin", "hr"].includes(userRole);
+
   const getRoleBadgeColor = (role) => {
     switch (role?.toLowerCase()) {
       case "admin":
@@ -48,9 +56,11 @@ function EmployeesTable({
             <th className="p-3 text-left text-gray-700 dark:text-gray-200 font-semibold">
               Joining Date
             </th>
-            <th className="p-3 text-center text-gray-700 dark:text-gray-200 font-semibold">
-              Actions
-            </th>
+            {canManageEmployees && (
+              <th className="p-3 text-center text-gray-700 dark:text-gray-200 font-semibold">
+                Actions
+              </th>
+            )}
           </tr>
         </thead>
 
@@ -104,29 +114,35 @@ function EmployeesTable({
                   {employee.joining_date || "-"}
                 </td>
 
-                <td className="p-3 text-center">
-                  <div className="flex justify-center gap-2">
-                    <button
-                      onClick={() => editEmployee(employee)}
-                      className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1.5 rounded-lg text-sm transition font-medium"
-                    >
-                      ✏️ Edit
-                    </button>
+                {canManageEmployees && (
+                  <td className="p-3 text-center">
+                    <div className="flex justify-center gap-2">
+                      {editEmployee && (
+                        <button
+                          onClick={() => editEmployee(employee)}
+                          className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1.5 rounded-lg text-sm transition font-medium"
+                        >
+                          ✏️ Edit
+                        </button>
+                      )}
 
-                    <button
-                      onClick={() => deleteEmployee(employee.id)}
-                      className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm transition font-medium"
-                    >
-                      🗑 Delete
-                    </button>
-                  </div>
-                </td>
+                      {deleteEmployee && (
+                        <button
+                          onClick={() => deleteEmployee(employee.id)}
+                          className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm transition font-medium"
+                        >
+                          🗑 Delete
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                )}
               </tr>
             ))
           ) : (
             <tr>
               <td
-                colSpan="10"
+                colSpan={canManageEmployees ? "10" : "9"}
                 className="text-center p-10 text-gray-500 dark:text-gray-400"
               >
                 No employees found.

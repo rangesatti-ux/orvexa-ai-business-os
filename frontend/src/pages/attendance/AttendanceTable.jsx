@@ -65,7 +65,7 @@ function AttendanceTable({
                 >
                   {employeeId
                     ? "No attendance records found for this employee."
-                    : "Select an employee to view attendance."}
+                    : "No attendance records found."}
                 </td>
               </tr>
             ) : (

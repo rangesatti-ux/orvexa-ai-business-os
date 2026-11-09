@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "../../context/AuthContext";
 
 function LeaveForm({
   saveLeave,
@@ -8,6 +9,12 @@ function LeaveForm({
   loadingEmployees = false,
   submitting = false,
 }) {
+  const { user } = useAuth();
+  const userRole = user?.role ? user.role.toLowerCase() : "employee";
+  const isEmployee = userRole === "employee";
+  const isHr = userRole === "hr";
+  const isPersonalOnly = isEmployee || isHr;
+
   const [formData, setFormData] = useState({
     employee_id: "",
     leave_type: "Casual",
@@ -16,6 +23,7 @@ function LeaveForm({
     reason: "",
   });
 
+  // Auto-detect and pre-fill employee ID if the user is an employee or HR
   useEffect(() => {
     if (editingLeave) {
       setFormData({
@@ -25,14 +33,36 @@ function LeaveForm({
         end_date: editingLeave.end_date || "",
         reason: editingLeave.reason || "",
       });
+    } else if (isPersonalOnly && employees.length > 0) {
+      const matchingEmp = employees.find(
+        (emp) =>
+          (emp.email && user?.email && emp.email.toLowerCase() === user.email.toLowerCase()) ||
+          (emp.full_name && user?.name && emp.full_name.toLowerCase() === user.name.toLowerCase()) ||
+          Number(emp.id) === Number(user?.id)
+      );
+      setFormData((prev) => ({
+        ...prev,
+        employee_id: matchingEmp ? matchingEmp.id : employees[0]?.id || "",
+      }));
     } else {
       resetForm();
     }
-  }, [editingLeave]);
+  }, [editingLeave, employees, user, isPersonalOnly]);
 
   const resetForm = () => {
+    let defaultEmpId = "";
+    if (isPersonalOnly && employees.length > 0) {
+      const matchingEmp = employees.find(
+        (emp) =>
+          (emp.email && user?.email && emp.email.toLowerCase() === user.email.toLowerCase()) ||
+          (emp.full_name && user?.name && emp.full_name.toLowerCase() === user.name.toLowerCase()) ||
+          Number(emp.id) === Number(user?.id)
+      );
+      defaultEmpId = matchingEmp ? matchingEmp.id : employees[0]?.id || "";
+    }
+
     setFormData({
-      employee_id: "",
+      employee_id: defaultEmpId,
       leave_type: "Casual",
       start_date: "",
       end_date: "",
@@ -94,7 +124,7 @@ function LeaveForm({
               name="employee_id"
               value={formData.employee_id}
               onChange={handleChange}
-              disabled={loadingEmployees || submitting || isEditing}
+              disabled={loadingEmployees || submitting || isEditing || isPersonalOnly}
               className="w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2.5 text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
               required
             >
@@ -107,6 +137,11 @@ function LeaveForm({
                 </option>
               ))}
             </select>
+            {isPersonalOnly && (
+              <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                You are submitting this request for your own profile.
+              </p>
+            )}
           </div>
 
           {/* Leave Type */}

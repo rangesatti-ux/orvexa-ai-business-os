@@ -14,10 +14,13 @@ import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 
 function LeavePage() {
-  const { user, hasRole } = useAuth();
+  const { user } = useAuth();
+  const userRole = user?.role ? user.role.toLowerCase() : "employee";
+
   const [employees, setEmployees] = useState([]);
   const [leaveData, setLeaveData] = useState([]);
 
+  // Form states
   const [employeeId, setEmployeeId] = useState("");
   const [leaveType, setLeaveType] = useState("Casual");
   const [startDate, setStartDate] = useState("");
@@ -39,8 +42,37 @@ function LeavePage() {
     rejected: 0,
   });
 
-  // Check if current user has permission to approve/reject leaves
-  const isManagerOrHR = hasRole(["Admin", "HR", "Manager"]);
+  const isAdmin = userRole === "admin";
+  const isHr = userRole === "hr";
+  const isManager = userRole === "manager";
+  const isEmployee = userRole === "employee";
+
+  // Admins cannot apply for leave. HR can only apply for their own leave. Employees apply for their own.
+  const canApplyLeave = !isAdmin;
+
+  // Helper to find an employee's role based on ID/records
+  const getEmployeeRole = (empId) => {
+    const found = employees.find((e) => Number(e.id) === Number(empId));
+    return found?.role ? String(found.role).toLowerCase() : "employee";
+  };
+
+  // Strict approval permission matrix:
+  // - Admin can approve anyone's leave.
+  // - HR can approve Manager and Employee leaves (cannot approve Admin).
+  // - Manager can approve Employee leaves only.
+  const canApproveLeaveFor = (targetEmployeeId) => {
+    if (isAdmin) return true;
+    
+    const targetRole = getEmployeeRole(targetEmployeeId);
+    
+    if (isHr) {
+      return ["manager", "employee"].includes(targetRole);
+    }
+    if (isManager) {
+      return targetRole === "employee";
+    }
+    return false;
+  };
 
   const loadEmployees = async () => {
     try {
@@ -54,6 +86,21 @@ function LeavePage() {
         : response.data?.employees || response.data?.data || [];
 
       setEmployees(data);
+
+      // Pre-select employee profile if user is employee or HR (HR can only apply for own leave)
+      if ((isEmployee || isHr) && data.length > 0) {
+        const matchingEmp = data.find(
+          (emp) =>
+            (emp.email && user?.email && emp.email.toLowerCase() === user.email.toLowerCase()) ||
+            (emp.full_name && user?.name && emp.full_name.toLowerCase() === user.name.toLowerCase()) ||
+            Number(emp.id) === Number(user?.id)
+        );
+        if (matchingEmp) {
+          setEmployeeId(matchingEmp.id);
+        } else if (isEmployee) {
+          setEmployeeId(data[0].id);
+        }
+      }
     } catch (error) {
       console.error("Failed to load employees:", error);
       setEmployees([]);
@@ -66,7 +113,20 @@ function LeavePage() {
     try {
       setLoadingLeaves(true);
       const response = await api.get("/leaves/");
-      setLeaveData(Array.isArray(response.data) ? response.data : []);
+      let fetchedLeaves = Array.isArray(response.data) ? response.data : [];
+
+      // If user is an employee, restrict view to only their own leave requests
+      if (isEmployee && user) {
+        fetchedLeaves = fetchedLeaves.filter((leave) => {
+          const emp = employees.find((e) => Number(e.id) === Number(leave.employee_id));
+          return (
+            Number(leave.employee_id) === Number(user.id) ||
+            (emp && emp.email && user.email && emp.email.toLowerCase() === user.email.toLowerCase())
+          );
+        });
+      }
+
+      setLeaveData(fetchedLeaves);
     } catch (error) {
       console.error("Failed to load leaves:", error);
       setLeaveData([]);
@@ -96,7 +156,7 @@ function LeavePage() {
     loadEmployees();
     loadLeaves();
     loadStats();
-  }, []);
+  }, [user]);
 
   const refreshAll = async () => {
     await Promise.all([loadEmployees(), loadLeaves(), loadStats()]);
@@ -104,6 +164,25 @@ function LeavePage() {
 
   const handleApplyLeave = async (e) => {
     e.preventDefault();
+
+    if (isAdmin) {
+      toast.error("Admins cannot submit leave requests.");
+      return;
+    }
+
+    // Ensure HR can only apply for their own leave
+    if (isHr && user) {
+      const matchingEmp = employees.find(
+        (emp) =>
+          (emp.email && user?.email && emp.email.toLowerCase() === user.email.toLowerCase()) ||
+          Number(emp.id) === Number(user?.id)
+      );
+      if (matchingEmp && Number(employeeId) !== Number(matchingEmp.id)) {
+        toast.error("HR can only apply for their own leave request.");
+        setEmployeeId(matchingEmp.id);
+        return;
+      }
+    }
 
     if (!employeeId) {
       toast.warning("Please select an employee.");
@@ -141,7 +220,9 @@ function LeavePage() {
       });
 
       toast.success("Leave request submitted successfully.");
-      setEmployeeId("");
+      if (userRole === "manager") {
+        setEmployeeId("");
+      }
       setLeaveType("Casual");
       setStartDate("");
       setEndDate("");
@@ -159,7 +240,12 @@ function LeavePage() {
     }
   };
 
-  const handleStatusUpdate = async (leaveId, status) => {
+  const handleStatusUpdate = async (leaveId, status, targetEmployeeId) => {
+    if (!canApproveLeaveFor(targetEmployeeId)) {
+      toast.error("Unauthorized: You do not have permission to approve/reject this leave request.");
+      return;
+    }
+
     try {
       setUpdatingStatus(leaveId);
       await api.put(`/leaves/${leaveId}/status`, { status });
@@ -242,7 +328,11 @@ function LeavePage() {
             Leave Management
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
-            Apply, review, and track leave requests synced with backend records.
+            {isAdmin
+              ? "Review and approve employee and staff leave requests."
+              : isHr
+              ? "Apply for your leave and review manager/employee leave requests."
+              : "Apply, review, and track leave requests."}
           </p>
         </div>
 
@@ -280,124 +370,135 @@ function LeavePage() {
         </div>
       </div>
 
-      {/* Leave Application Form */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-        <div className="mb-6 flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/30">
-            <CalendarDays
-              size={21}
-              className="text-blue-600 dark:text-blue-400"
-            />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
-              Apply for Leave
-            </h2>
-            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
-              Submit a new leave application for approval.
-            </p>
-          </div>
-        </div>
-
-        <form onSubmit={handleApplyLeave} className="space-y-5">
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+      {/* Leave Application Form: Hidden for Admins */}
+      {canApplyLeave ? (
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <div className="mb-6 flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/30">
+              <CalendarDays
+                size={21}
+                className="text-blue-600 dark:text-blue-400"
+              />
+            </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
-                Employee
-              </label>
-              <select
-                value={employeeId}
-                onChange={(e) => setEmployeeId(e.target.value)}
-                disabled={loadingEmployees || submitting}
-                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
-              >
-                <option value="">
-                  {loadingEmployees
-                    ? "Loading employees..."
-                    : "Select an employee"}
-                </option>
-                {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.full_name || emp.name} — EMP #{emp.employee_id || emp.id}
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
+                Apply for Leave
+              </h2>
+              <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+                {isHr ? "Submit your personal leave application." : "Submit a new leave application for approval."}
+              </p>
+            </div>
+          </div>
+
+          <form onSubmit={handleApplyLeave} className="space-y-5">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
+                  Employee
+                </label>
+                <select
+                  value={employeeId}
+                  onChange={(e) => setEmployeeId(e.target.value)}
+                  disabled={loadingEmployees || submitting || isEmployee || isHr}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                >
+                  <option value="">
+                    {loadingEmployees
+                      ? "Loading employees..."
+                      : "Select an employee"}
                   </option>
-                ))}
-              </select>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.full_name || emp.name} — EMP #{emp.employee_id || emp.id}
+                    </option>
+                  ))}
+                </select>
+                {isHr && (
+                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                    HR is restricted to applying for personal leave only.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
+                  Leave Type
+                </label>
+                <select
+                  value={leaveType}
+                  onChange={(e) => setLeaveType(e.target.value)}
+                  disabled={submitting}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                >
+                  <option value="Casual">Casual</option>
+                  <option value="Sick">Sick</option>
+                  <option value="Emergency">Emergency</option>
+                  <option value="Earned">Earned</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  disabled={submitting}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  min={startDate || undefined}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  disabled={submitting}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                />
+              </div>
             </div>
 
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
-                Leave Type
+                Reason
               </label>
-              <select
-                value={leaveType}
-                onChange={(e) => setLeaveType(e.target.value)}
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Enter reason for leave..."
+                rows={3}
                 disabled={submitting}
-                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                className="w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+              />
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={submitting || loadingEmployees}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
               >
-                <option value="Casual">Casual</option>
-                <option value="Sick">Sick</option>
-                <option value="Emergency">Emergency</option>
-                <option value="Earned">Earned</option>
-                <option value="Other">Other</option>
-              </select>
+                <CalendarDays size={18} />
+                {submitting ? "Submitting..." : "Apply for Leave"}
+              </button>
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
-                Start Date
-              </label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                disabled={submitting}
-                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
-                End Date
-              </label>
-              <input
-                type="date"
-                value={endDate}
-                min={startDate || undefined}
-                onChange={(e) => setEndDate(e.target.value)}
-                disabled={submitting}
-                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
-              Reason
-            </label>
-            <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Enter reason for leave..."
-              rows={3}
-              disabled={submitting}
-              className="w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
-            />
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={submitting || loadingEmployees}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
-            >
-              <CalendarDays size={18} />
-              {submitting ? "Submitting..." : "Apply for Leave"}
-            </button>
-          </div>
-        </form>
-      </div>
+          </form>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+          ℹ️ Administrator role is restricted from applying for leave. You can review, approve, or reject incoming requests below.
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="flex flex-col gap-3 sm:flex-row">
@@ -410,7 +511,7 @@ function LeavePage() {
         />
         <div className="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-600 dark:bg-slate-800 dark:text-slate-300">
           <Users size={17} />
-          {leaveData.length} Total Requests
+          {leaveData.length} Requests Found
         </div>
       </div>
 
@@ -513,13 +614,14 @@ function LeavePage() {
 
                     <td className="px-5 py-4 text-center">
                       <div className="flex items-center justify-center gap-2">
-                        {isManagerOrHR &&
+                        {/* Conditional approval buttons based on target hierarchy role */}
+                        {canApproveLeaveFor(leave.employee_id) &&
                           String(leave.status).toLowerCase() === "pending" && (
                             <>
                               <button
                                 type="button"
                                 onClick={() =>
-                                  handleStatusUpdate(leave.id, "Approved")
+                                  handleStatusUpdate(leave.id, "Approved", leave.employee_id)
                                 }
                                 disabled={updatingStatus === leave.id}
                                 title="Approve Leave"
@@ -531,7 +633,7 @@ function LeavePage() {
                               <button
                                 type="button"
                                 onClick={() =>
-                                  handleStatusUpdate(leave.id, "Rejected")
+                                  handleStatusUpdate(leave.id, "Rejected", leave.employee_id)
                                 }
                                 disabled={updatingStatus === leave.id}
                                 title="Reject Leave"
@@ -542,6 +644,7 @@ function LeavePage() {
                             </>
                           )}
 
+                        {/* Delete option */}
                         <button
                           type="button"
                           onClick={() => handleDelete(leave.id)}

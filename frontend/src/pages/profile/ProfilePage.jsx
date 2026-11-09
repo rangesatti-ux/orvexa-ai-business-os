@@ -1,28 +1,37 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { Pencil, Save, X, UserRound } from "lucide-react";
 import { toast } from "react-toastify";
+import api from "../../services/api"; // Import your API helper client
 
 export default function ProfilePage() {
   const { user } = useAuth();
 
   const [editing, setEditing] = useState(false);
-  const [profile, setProfile] = useState(() => {
-    let saved = {};
-    try {
-      saved = JSON.parse(localStorage.getItem("user") || "{}");
-    } catch {
-      saved = {};
-    }
-
-    return {
-      name: saved.name || user?.name || "",
-      email: saved.email || user?.email || "",
-    };
+  const [loading, setLoading] = useState(false);
+  const [profile, setProfile] = useState({
+    name: user?.name || "",
+    email: user?.email || "",
+    role: user?.role || "",
   });
 
   const [draft, setDraft] = useState(profile);
+
+  // Sync profile state when Auth context updates
+  useEffect(() => {
+    if (user) {
+      setProfile({
+        name: user.name || "",
+        email: user.email || "",
+        role: user.role || "",
+      });
+      setDraft({
+        name: user.name || "",
+        email: user.email || "",
+        role: user.role || "",
+      });
+    }
+  }, [user]);
 
   const startEditing = () => {
     setDraft({ ...profile });
@@ -34,7 +43,7 @@ export default function ProfilePage() {
     setEditing(false);
   };
 
-  const saveProfile = (event) => {
+  const saveProfile = async (event) => {
     event.preventDefault();
 
     if (!draft.name.trim() || !draft.email.trim()) {
@@ -42,20 +51,34 @@ export default function ProfilePage() {
       return;
     }
 
-    const updated = {
-      ...profile,
-      name: draft.name.trim(),
-      email: draft.email.trim(),
-    };
+    try {
+      setLoading(true);
 
-    setProfile(updated);
-    localStorage.setItem("user", JSON.stringify({
-      ...(user || {}),
-      ...updated,
-    }));
+      // Sending changes to backend database via PUT/PATCH endpoint
+      const response = await api.put("/profile/", {
+        name: draft.name.trim(),
+        email: draft.email.trim(),
+      });
 
-    setEditing(false);
-    toast.success("Profile updated on this browser.");
+      const updatedData = response.data;
+
+      setProfile({
+        name: updatedData.name || draft.name.trim(),
+        email: updatedData.email || draft.email.trim(),
+        role: profile.role,
+      });
+
+      setEditing(false);
+      toast.success("Profile successfully updated in the database!");
+      
+      // Optional: Refresh page or trigger auth state reload if your context supports it
+      window.location.reload(); 
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || "Failed to update profile on the server.";
+      toast.error(errorMsg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -66,7 +89,7 @@ export default function ProfilePage() {
             My Profile
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            View and manage your profile information.
+            View and update your personal account information.
           </p>
         </div>
 
@@ -83,6 +106,7 @@ export default function ProfilePage() {
           <button
             type="button"
             onClick={cancelEditing}
+            disabled={loading}
             className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-gray-700 dark:border-gray-600 dark:text-gray-200"
           >
             <X size={17} />
@@ -103,6 +127,9 @@ export default function ProfilePage() {
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {profile.email || "No email provided"}
             </p>
+            <span className="mt-1 inline-block rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium uppercase text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+              {profile.role || "Employee"}
+            </span>
           </div>
         </div>
 
@@ -119,6 +146,7 @@ export default function ProfilePage() {
                 setDraft({ ...draft, name: e.target.value })
               }
               className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white read-only:bg-gray-50 dark:read-only:bg-gray-700"
+              required
             />
           </div>
 
@@ -134,23 +162,24 @@ export default function ProfilePage() {
                 setDraft({ ...draft, email: e.target.value })
               }
               className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white read-only:bg-gray-50 dark:read-only:bg-gray-700"
+              required
             />
           </div>
 
           {editing && (
             <button
               type="submit"
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-3 font-medium text-white hover:bg-blue-700"
+              disabled={loading}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-3 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
               <Save size={17} />
-              Save Changes
+              {loading ? "Saving..." : "Save Changes"}
             </button>
           )}
         </form>
 
         <p className="mt-5 text-xs text-gray-500 dark:text-gray-400">
-          Profile changes are saved locally in this browser. They do not
-          change your account details on the server.
+          Changes made here will securely update your account details in the database system.
         </p>
       </div>
     </div>

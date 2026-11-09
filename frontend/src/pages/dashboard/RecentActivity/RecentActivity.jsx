@@ -5,36 +5,42 @@ import {
   IndianRupee,
   Clock,
   Activity,
+  ShieldAlert,
 } from "lucide-react";
 
 import api from "../../../services/api";
+import { useAuth } from "../../../context/AuthContext";
 
 function RecentActivity() {
+  const { user } = useAuth();
+  const userRole = user?.role ? user.role.toLowerCase() : "employee";
+
+  // Per rules: Audit logs and system activity feeds are restricted to Admin and HR roles.
+  const canViewActivity = ["admin", "hr"].includes(userRole);
+
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!canViewActivity) {
+      setLoading(false);
+      return;
+    }
+
     const fetchRecentActivity = async () => {
       try {
         setLoading(true);
         setError("");
 
         const response = await api.get("/audit/");
-
-        console.log("Recent activity:", response.data);
-
         const data = Array.isArray(response.data)
           ? response.data
           : response.data?.items || [];
 
         setActivities(data.slice(0, 5));
       } catch (err) {
-        console.error(
-          "Failed to load recent activity:",
-          err
-        );
-
+        console.error("Failed to load recent activity:", err);
         setError("Unable to load recent activity.");
       } finally {
         setLoading(false);
@@ -42,24 +48,33 @@ function RecentActivity() {
     };
 
     fetchRecentActivity();
-  }, []);
+  }, [canViewActivity]);
+
+  // If user role does not have permission, show security restriction notice
+  if (!canViewActivity) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center dark:border-amber-900/40 dark:bg-amber-950/20">
+        <ShieldAlert size={38} className="text-amber-500 mb-3" />
+        <h3 className="text-lg font-bold text-gray-800 dark:text-white">
+          Activity Stream Restricted
+        </h3>
+        <p className="mt-1 text-sm text-gray-600 dark:text-slate-400 max-w-md">
+          System audit trails and recent activity logs are restricted to Administrators and HR personnel.
+        </p>
+      </div>
+    );
+  }
 
   const getActivityIcon = (activity) => {
     const text = `${activity?.action || ""} ${
       activity?.resource || ""
     }`.toLowerCase();
 
-    if (
-      text.includes("employee") ||
-      text.includes("user")
-    ) {
+    if (text.includes("employee") || text.includes("user")) {
       return UserPlus;
     }
 
-    if (
-      text.includes("product") ||
-      text.includes("inventory")
-    ) {
+    if (text.includes("product") || text.includes("inventory")) {
       return Package;
     }
 
@@ -71,10 +86,7 @@ function RecentActivity() {
       return IndianRupee;
     }
 
-    if (
-      text.includes("attendance") ||
-      text.includes("leave")
-    ) {
+    if (text.includes("attendance") || text.includes("leave")) {
       return Clock;
     }
 
@@ -86,17 +98,11 @@ function RecentActivity() {
       activity?.resource || ""
     }`.toLowerCase();
 
-    if (
-      text.includes("employee") ||
-      text.includes("user")
-    ) {
+    if (text.includes("employee") || text.includes("user")) {
       return "text-blue-600";
     }
 
-    if (
-      text.includes("product") ||
-      text.includes("inventory")
-    ) {
+    if (text.includes("product") || text.includes("inventory")) {
       return "text-green-600";
     }
 
@@ -108,10 +114,7 @@ function RecentActivity() {
       return "text-yellow-600";
     }
 
-    if (
-      text.includes("attendance") ||
-      text.includes("leave")
-    ) {
+    if (text.includes("attendance") || text.includes("leave")) {
       return "text-purple-600";
     }
 
@@ -155,42 +158,26 @@ function RecentActivity() {
     }
 
     const now = new Date();
-    const difference = Math.floor(
-      (now - date) / 1000
-    );
+    const difference = Math.floor((now - date) / 1000);
 
     if (difference < 60) {
       return "Just now";
     }
 
     if (difference < 3600) {
-      const minutes = Math.floor(
-        difference / 60
-      );
-
-      return `${minutes} ${
-        minutes === 1 ? "minute" : "minutes"
-      } ago`;
+      const minutes = Math.floor(difference / 60);
+      return `${minutes} ${minutes === 1 ? "minute" : "minutes"} ago`;
     }
 
     if (difference < 86400) {
-      const hours = Math.floor(
-        difference / 3600
-      );
-
-      return `${hours} ${
-        hours === 1 ? "hour" : "hours"
-      } ago`;
+      const hours = Math.floor(difference / 3600);
+      return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
     }
 
-    const days = Math.floor(
-      difference / 86400
-    );
+    const days = Math.floor(difference / 86400);
 
     if (days < 7) {
-      return `${days} ${
-        days === 1 ? "day" : "days"
-      } ago`;
+      return `${days} ${days === 1 ? "day" : "days"} ago`;
     }
 
     return date.toLocaleDateString("en-IN");
@@ -214,66 +201,50 @@ function RecentActivity() {
         </div>
       )}
 
-      {!loading &&
-        !error &&
-        activities.length === 0 && (
-          <div className="py-8 text-center">
-            <Activity
-              size={40}
-              className="mx-auto mb-3 text-gray-400"
-            />
+      {!loading && !error && activities.length === 0 && (
+        <div className="py-8 text-center">
+          <Activity size={40} className="mx-auto mb-3 text-gray-400" />
+          <p className="text-gray-500 dark:text-gray-400">
+            No recent activity found.
+          </p>
+        </div>
+      )}
 
-            <p className="text-gray-500 dark:text-gray-400">
-              No recent activity found.
-            </p>
-          </div>
-        )}
+      {!loading && !error && activities.length > 0 && (
+        <div className="space-y-4">
+          {activities.map((activity, index) => {
+            const Icon = getActivityIcon(activity);
+            const color = getActivityColor(activity);
 
-      {!loading &&
-        !error &&
-        activities.length > 0 && (
-          <div className="space-y-4">
-            {activities.map((activity, index) => {
-              const Icon =
-                getActivityIcon(activity);
+            return (
+              <div
+                key={
+                  activity.id ??
+                  activity.audit_id ??
+                  index
+                }
+                className="flex items-center justify-between border-b dark:border-slate-700 pb-3 last:border-b-0"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="bg-gray-100 dark:bg-slate-700 p-3 rounded-full">
+                    <Icon size={20} className={color} />
+                  </div>
 
-              const color =
-                getActivityColor(activity);
+                  <div>
+                    <p className="font-medium text-gray-800 dark:text-white">
+                      {formatActivityText(activity)}
+                    </p>
 
-              return (
-                <div
-                  key={
-                    activity.id ??
-                    activity.audit_id ??
-                    index
-                  }
-                  className="flex items-center justify-between border-b dark:border-slate-700 pb-3 last:border-b-0"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="bg-gray-100 dark:bg-slate-700 p-3 rounded-full">
-                      <Icon
-                        size={20}
-                        className={color}
-                      />
-                    </div>
-
-                    <div>
-                      <p className="font-medium text-gray-800 dark:text-white">
-                        {formatActivityText(
-                          activity
-                        )}
-                      </p>
-
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {formatTime(activity)}
-                      </p>
-                    </div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {formatTime(activity)}
+                    </p>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,10 +1,17 @@
 import { Pencil, Trash2 } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
 
 function DepartmentTable({
   departments,
   deleteDepartment,
   editDepartment,
 }) {
+  const { user } = useAuth();
+  const userRole = user?.role ? user.role.toLowerCase() : "employee";
+  
+  // Per rules: Only Admin and HR can manage/edit/delete departments
+  const canManageDepartments = ["admin", "hr"].includes(userRole);
+
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
       <div className="overflow-x-auto">
@@ -31,9 +38,11 @@ function DepartmentTable({
                 Status
               </th>
 
-              <th className="p-4 text-center text-sm font-semibold text-gray-700 dark:text-slate-300">
-                Actions
-              </th>
+              {canManageDepartments && (
+                <th className="p-4 text-center text-sm font-semibold text-gray-700 dark:text-slate-300">
+                  Actions
+                </th>
+              )}
             </tr>
           </thead>
 
@@ -41,7 +50,7 @@ function DepartmentTable({
             {departments.length === 0 ? (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={canManageDepartments ? 6 : 5}
                   className="p-10 text-center text-gray-500 dark:text-slate-400"
                 >
                   No departments found.
@@ -90,27 +99,33 @@ function DepartmentTable({
                     </span>
                   </td>
 
-                  <td className="p-4">
-                    <div className="flex justify-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => editDepartment(department)}
-                        title="Edit department"
-                        className="rounded-lg bg-yellow-500 p-2 text-white transition hover:bg-yellow-600"
-                      >
-                        <Pencil size={17} />
-                      </button>
+                  {canManageDepartments && (
+                    <td className="p-4">
+                      <div className="flex justify-center gap-2">
+                        {editDepartment && (
+                          <button
+                            type="button"
+                            onClick={() => editDepartment(department)}
+                            title="Edit department"
+                            className="rounded-lg bg-yellow-500 p-2 text-white transition hover:bg-yellow-600"
+                          >
+                            <Pencil size={17} />
+                          </button>
+                        )}
 
-                      <button
-                        type="button"
-                        onClick={() => deleteDepartment(department.id)}
-                        title="Delete department"
-                        className="rounded-lg bg-red-600 p-2 text-white transition hover:bg-red-700"
-                      >
-                        <Trash2 size={17} />
-                      </button>
-                    </div>
-                  </td>
+                        {deleteDepartment && (
+                          <button
+                            type="button"
+                            onClick={() => deleteDepartment(department.id)}
+                            title="Delete department"
+                            className="rounded-lg bg-red-600 p-2 text-white transition hover:bg-red-700"
+                          >
+                            <Trash2 size={17} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))
             )}
