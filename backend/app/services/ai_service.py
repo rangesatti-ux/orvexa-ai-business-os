@@ -1,3 +1,4 @@
+import logging
 from openai import OpenAI
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -8,21 +9,24 @@ from app.models.sale import Sale
 from app.models.purchase import Purchase
 from app.models.payroll import Payroll
 
+logger = logging.getLogger(__name__)
 
-def generate_ai_insights(db: Session):
+
+def generate_ai_insights(db: Session) -> list[str]:
+    """Generate key business health insights based on financial and inventory metrics."""
     insights = []
 
     revenue = db.query(
-        func.coalesce(func.sum(Sale.grand_total), 0)
-    ).scalar()
+        func.coalesce(func.sum(Sale.grand_total), 0.0)
+    ).scalar() or 0.0
 
     purchases = db.query(
-        func.coalesce(func.sum(Purchase.grand_total), 0)
-    ).scalar()
+        func.coalesce(func.sum(Purchase.grand_total), 0.0)
+    ).scalar() or 0.0
 
     payroll = db.query(
-        func.coalesce(func.sum(Payroll.net_salary), 0)
-    ).scalar()
+        func.coalesce(func.sum(Payroll.net_salary), 0.0)
+    ).scalar() or 0.0
 
     low_stock = db.query(Product).filter(
         Product.quantity < 10
@@ -40,14 +44,14 @@ def generate_ai_insights(db: Session):
             f"{low_stock} products need immediate restocking."
         )
 
-    if payroll > revenue * 0.30:
+    if revenue > 0 and payroll > revenue * 0.30:
         insights.append(
             "Payroll expenses exceed 30% of revenue."
         )
 
     if profit > 0:
         insights.append(
-            f"Estimated profit is ?{profit:,.2f}."
+            f"Estimated profit is ₹{profit:,.2f}."
         )
     else:
         insights.append(
@@ -61,7 +65,7 @@ def generate_ai_response(
     db: Session,
     user_message: str,
 ) -> str:
-
+    """Generate an AI assistant response using Groq with live business context."""
     if not settings.GROQ_API_KEY:
         return (
             "AI service is not configured yet. "
@@ -69,16 +73,16 @@ def generate_ai_response(
         )
 
     revenue = db.query(
-        func.coalesce(func.sum(Sale.grand_total), 0)
-    ).scalar()
+        func.coalesce(func.sum(Sale.grand_total), 0.0)
+    ).scalar() or 0.0
 
     purchases = db.query(
-        func.coalesce(func.sum(Purchase.grand_total), 0)
-    ).scalar()
+        func.coalesce(func.sum(Purchase.grand_total), 0.0)
+    ).scalar() or 0.0
 
     payroll = db.query(
-        func.coalesce(func.sum(Payroll.net_salary), 0)
-    ).scalar()
+        func.coalesce(func.sum(Payroll.net_salary), 0.0)
+    ).scalar() or 0.0
 
     product_count = db.query(Product).count()
 
@@ -105,14 +109,14 @@ IMPORTANT RULES:
 - Do not claim access to data that is not provided.
 - If the available data is insufficient, clearly say so.
 - Give concise, practical answers.
-- Format financial values in Indian Rupees (?).
+- Format financial values in Indian Rupees (₹).
 
 CURRENT BUSINESS DATA:
 
-Total revenue: ?{revenue:,.2f}
-Total purchases: ?{purchases:,.2f}
-Total payroll expense: ?{payroll:,.2f}
-Estimated profit: ?{profit:,.2f}
+Total revenue: ₹{revenue:,.2f}
+Total purchases: ₹{purchases:,.2f}
+Total payroll expense: ₹{payroll:,.2f}
+Estimated profit: ₹{profit:,.2f}
 Total products: {product_count}
 
 Low-stock products:
@@ -150,10 +154,7 @@ USER QUESTION:
         return response.choices[0].message.content
 
     except Exception as exc:
-        print(
-            f"GROQ ERROR: {type(exc).__name__}: {exc}"
-        )
-
+        logger.exception(f"GROQ ERROR: {type(exc).__name__}: {exc}")
         return (
             "I couldn't process your request right now. "
             "Please try again."

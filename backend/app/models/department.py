@@ -1,4 +1,3 @@
-
 from sqlalchemy import (
     Column,
     Integer,
@@ -9,6 +8,7 @@ from sqlalchemy import (
     Index,
     text,
 )
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.database.base import Base
@@ -19,10 +19,11 @@ class Department(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('Active', 'Inactive')",
+            "LOWER(status) IN ('active', 'inactive')",
             name="ck_department_status",
         ),
         Index("ix_departments_status", "status"),
+        Index("ix_departments_code_name", "department_code", "department_name"),
     )
 
     id = Column(
@@ -73,3 +74,19 @@ class Department(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+    # Relationships
+    employees = relationship(
+        "Employee",
+        back_populates="department_rel",
+        foreign_keys="[Employee.department_id]",
+    )
+
+    @property
+    def name(self) -> str:
+        """Alias property so both .name and .department_name resolve cleanly."""
+        return self.department_name
+
+    @name.setter
+    def name(self, value: str):
+        self.department_name = value

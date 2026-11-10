@@ -1,4 +1,3 @@
-
 from sqlalchemy import (
     Column,
     Integer,
@@ -27,6 +26,7 @@ class Leave(Base):
         Index("ix_leaves_employee_id", "employee_id"),
         Index("ix_leaves_status", "status"),
         Index("ix_leaves_start_date", "start_date"),
+        Index("ix_leaves_approved_by_id", "approved_by_id"),
     )
 
     id = Column(
@@ -68,13 +68,45 @@ class Leave(Base):
         nullable=False,
     )
 
+    approved_by_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    rejection_reason = Column(
+        String(255),
+        nullable=True,
+    )
+
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
     )
 
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
     employee = relationship(
         "Employee",
         back_populates="leave_records",
     )
+
+    approved_by_user = relationship(
+        "User",
+        foreign_keys=[approved_by_id],
+    )
+
+    @property
+    def total_days(self) -> int:
+        """Calculates total duration of leave in days."""
+        if self.start_date and self.end_date:
+            delta = (self.end_date - self.start_date).days + 1
+            return max(delta, 1)
+        return 0

@@ -1,10 +1,10 @@
-
 from sqlalchemy import (
     Column,
     Integer,
     String,
     DateTime,
     Boolean,
+    Index,
     text,
 )
 from sqlalchemy.sql import func
@@ -15,6 +15,12 @@ from app.database.base import Base
 
 class User(Base):
     __tablename__ = "users"
+
+    __table_args__ = (
+        Index("ix_users_email", "email"),
+        Index("ix_users_role", "role"),
+        Index("ix_users_is_active", "is_active"),
+    )
 
     id = Column(
         Integer,
@@ -56,10 +62,38 @@ class User(Base):
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
+        nullable=False,
     )
 
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # Reverse relationship to Employee profile
     employee = relationship(
         "Employee",
         back_populates="user",
         uselist=False,
     )
+
+    # --- Property Aliases for Full Compatibility ---
+    @property
+    def name(self) -> str:
+        """Alias property so both .name and .full_name resolve cleanly."""
+        return self.full_name
+
+    @name.setter
+    def name(self, value: str):
+        self.full_name = value
+
+    @property
+    def hashed_password(self) -> str:
+        """Alias property for compatibility with FastAPI security standard naming."""
+        return self.password
+
+    @hashed_password.setter
+    def hashed_password(self, value: str):
+        self.password = value

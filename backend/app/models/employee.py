@@ -1,4 +1,3 @@
-
 from sqlalchemy import (
     Column,
     Integer,
@@ -26,6 +25,10 @@ class Employee(Base):
             name="ck_employee_not_own_manager",
         ),
         Index("ix_employees_manager_id", "manager_id"),
+        Index("ix_employees_email", "email"),
+        Index("ix_employees_employee_id", "employee_id"),
+        Index("ix_employees_full_name", "full_name"),
+        Index("ix_employees_status", "status"),
     )
 
     id = Column(
@@ -52,7 +55,6 @@ class Employee(Base):
     )
 
     # Assign one direct manager to each employee.
-    # Manager can be changed by Admin/HR in the future.
     manager_id = Column(
         Integer,
         ForeignKey("employees.id", ondelete="SET NULL"),
@@ -76,17 +78,36 @@ class Employee(Base):
         nullable=False,
     )
 
-    phone = Column(String)
+    phone = Column(
+        String(50),
+        nullable=True,
+    )
 
-    # Retained for compatibility with existing records.
-    department = Column(String)
+    # Retained string column for backwards compatibility.
+    department = Column(
+        String(100),
+        nullable=True,
+    )
 
-    position = Column(String)
-    salary = Column(Float)
-    joining_date = Column(Date)
+    position = Column(
+        String(100),
+        nullable=True,
+    )
+
+    salary = Column(
+        Float,
+        default=0.0,
+        server_default="0.0",
+        nullable=False,
+    )
+
+    joining_date = Column(
+        Date,
+        nullable=True,
+    )
 
     status = Column(
-        String,
+        String(50),
         default="Active",
         server_default=text("'Active'"),
         nullable=False,
@@ -95,6 +116,14 @@ class Employee(Base):
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
+        nullable=False,
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
     # Login account relationship.
@@ -104,8 +133,12 @@ class Employee(Base):
         uselist=False,
     )
 
-    # Department relationship.
-    department_record = relationship("Department")
+    # Department relationship matching Department.employees
+    department_rel = relationship(
+        "Department",
+        back_populates="employees",
+        foreign_keys=[department_id],
+    )
 
     # Self-referencing manager relationship.
     manager = relationship(
@@ -142,3 +175,41 @@ class Employee(Base):
         back_populates="employee",
         cascade="all, delete-orphan",
     )
+
+    # --- Property Aliases for Full Compatibility ---
+    @property
+    def name(self) -> str:
+        """Alias property so both .name and .full_name resolve cleanly."""
+        return self.full_name
+
+    @name.setter
+    def name(self, value: str):
+        self.full_name = value
+
+    @property
+    def first_name(self) -> str:
+        """Derives first name from full_name."""
+        parts = (self.full_name or "").strip().split(" ")
+        return parts[0] if parts else ""
+
+    @property
+    def last_name(self) -> str:
+        """Derives last name from full_name."""
+        parts = (self.full_name or "").strip().split(" ")
+        return " ".join(parts[1:]) if len(parts) > 1 else ""
+
+    @property
+    def designation(self) -> str:
+        """Alias property so both .designation and .position resolve cleanly."""
+        return self.position or ""
+
+    @designation.setter
+    def designation(self, value: str):
+        self.position = value
+
+    @property
+    def role(self) -> str:
+        """Derives user role from linked User account or defaults to Employee."""
+        if self.user and hasattr(self.user, "role"):
+            return self.user.role
+        return "Employee"

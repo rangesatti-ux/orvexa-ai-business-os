@@ -1,17 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
+from app.dependencies.auth import get_current_user
 from app.dependencies.role import require_role
 from app.models.supplier import Supplier
+from app.models.user import User
+from app.models.audit_log import AuditLog
 from app.schemas.supplier import (
     SupplierCreate,
     SupplierUpdate,
     SupplierResponse,
     SupplierListResponse,
 )
-
 
 router = APIRouter(
     prefix="/suppliers",
@@ -22,20 +24,23 @@ router = APIRouter(
 @router.post(
     "/",
     response_model=SupplierResponse,
-    dependencies=[Depends(require_role("Admin", "HR"))],
+    status_code=status.HTTP_201_CREATED,
+    summary="Create Supplier",
 )
-def create_supplier(
+async def create_supplier(
+    request: Request,
     supplier: SupplierCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("Admin", "HR")),
 ):
     existing = (
         db.query(Supplier)
         .filter(
             or_(
-                Supplier.supplier_code == supplier.supplier_code,
-                Supplier.phone == supplier.phone,
-                Supplier.email == supplier.email,
-                Supplier.gst_number == supplier.gst_number,
+                Supplier.supplier_code == supplier.supplier_code.strip(),
+                Supplier.phone == supplier.phone.strip(),
+                Supplier.email == supplier.email.strip() if supplier.email else False,
+                Supplier.gst_number == supplier.gst_number.strip() if supplier.gst_number else False,
             )
         )
         .first()
@@ -43,8 +48,8 @@ def create_supplier(
 
     if existing:
         raise HTTPException(
-            status_code=400,
-            detail="Supplier already exists",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Supplier with this code, phone, email, or GST number already exists.",
         )
 
     try:
@@ -53,6 +58,19 @@ def create_supplier(
         )
 
         db.add(new_supplier)
+        db.flush()
+
+        audit = AuditLog(
+            user_id=current_user.id,
+            username=current_user.email,
+            role=current_user.role,
+            action=f"Created supplier: {new_supplier.supplier_name} ({new_supplier.supplier_code})",
+            module="Suppliers",
+            target_id=str(new_supplier.id),
+            ip_address=request.client.host if request.client else None,
+        )
+        db.add(audit)
+
         db.commit()
         db.refresh(new_supplier)
 
@@ -66,23 +84,27 @@ def create_supplier(
 @router.get(
     "/",
     response_model=SupplierListResponse,
+    summary="Get Suppliers",
 )
-def get_suppliers(
+async def get_suppliers(
     search: str | None = Query(default=None),
     active: bool | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     query = db.query(Supplier)
 
     if search:
+        search_term = f"%{search.strip()}%"
         query = query.filter(
             or_(
-                Supplier.supplier_name.ilike(f"%{search}%"),
-                Supplier.supplier_code.ilike(f"%{search}%"),
-                Supplier.phone.ilike(f"%{search}%"),
-                Supplier.contact_person.ilike(f"%{search}%"),
+                Supplier.supplier_name.ilike(search_term),
+                Supplier.supplier_code.ilike(search_term),
+                Supplier.phone.ilike(search_term),
+                Supplier.contact_person.ilike(search_term),
+                Supplier.email.ilike(search_term),
             )
         )
 
@@ -92,11 +114,12 @@ def get_suppliers(
         )
 
     total = query.count()
-    total_pages = (total + limit - 1) // limit
+    total_pages = (total + limit - 1) // limit if total > 0 else 1
     skip = (page - 1) * limit
 
     suppliers = (
         query
+        .order_by(Supplier.id.desc())
         .offset(skip)
         .limit(limit)
         .all()
@@ -111,18 +134,27 @@ def get_suppliers(
     }
 
 
-@router.get("/dashboard/stats")
-def supplier_dashboard(
+@router.get(
+    "/dashboard/stats",
+    summary="Supplier Dashboard Statistics",
+)
+async def supplier_dashboard(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    total = db.query(Supplier).count()
+    role = str(current_user.role or "").strip().casefold()
+    if role not in {"admin", "hr"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dashboard access requires Admin or HR role.",
+        )
 
+    total = db.query(Supplier).count()
     active = (
         db.query(Supplier)
         .filter(Supplier.is_active.is_(True))
         .count()
     )
-
     inactive = (
         db.query(Supplier)
         .filter(Supplier.is_active.is_(False))
@@ -139,10 +171,12 @@ def supplier_dashboard(
 @router.get(
     "/{supplier_id}",
     response_model=SupplierResponse,
+    summary="Get Single Supplier",
 )
-def get_supplier(
+async def get_supplier(
     supplier_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     supplier = (
         db.query(Supplier)
@@ -152,8 +186,8 @@ def get_supplier(
 
     if not supplier:
         raise HTTPException(
-            status_code=404,
-            detail="Supplier not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier not found.",
         )
 
     return supplier
@@ -162,12 +196,14 @@ def get_supplier(
 @router.put(
     "/{supplier_id}",
     response_model=SupplierResponse,
-    dependencies=[Depends(require_role("Admin", "HR"))],
+    summary="Update Supplier",
 )
-def update_supplier(
+async def update_supplier(
+    request: Request,
     supplier_id: int,
     supplier: SupplierUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("Admin", "HR")),
 ):
     existing = (
         db.query(Supplier)
@@ -177,8 +213,8 @@ def update_supplier(
 
     if not existing:
         raise HTTPException(
-            status_code=404,
-            detail="Supplier not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier not found.",
         )
 
     update_data = supplier.model_dump(
@@ -194,11 +230,10 @@ def update_supplier(
             )
             .first()
         )
-
         if duplicate:
             raise HTTPException(
-                status_code=400,
-                detail="Supplier code already exists",
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Supplier code already exists.",
             )
 
     if "phone" in update_data:
@@ -210,14 +245,13 @@ def update_supplier(
             )
             .first()
         )
-
         if duplicate_phone:
             raise HTTPException(
-                status_code=400,
-                detail="Supplier phone already exists",
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Supplier phone number already exists.",
             )
 
-    if "email" in update_data:
+    if "email" in update_data and update_data["email"]:
         duplicate_email = (
             db.query(Supplier)
             .filter(
@@ -226,16 +260,26 @@ def update_supplier(
             )
             .first()
         )
-
         if duplicate_email:
             raise HTTPException(
-                status_code=400,
-                detail="Supplier email already exists",
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Supplier email already exists.",
             )
 
     try:
         for key, value in update_data.items():
             setattr(existing, key, value)
+
+        audit = AuditLog(
+            user_id=current_user.id,
+            username=current_user.email,
+            role=current_user.role,
+            action=f"Updated supplier ID #{supplier_id}: {existing.supplier_name}",
+            module="Suppliers",
+            target_id=str(supplier_id),
+            ip_address=request.client.host if request.client else None,
+        )
+        db.add(audit)
 
         db.commit()
         db.refresh(existing)
@@ -250,11 +294,13 @@ def update_supplier(
 @router.delete(
     "/{supplier_id}",
     response_model=dict,
-    dependencies=[Depends(require_role("Admin"))],
+    summary="Delete Supplier (Admin Only)",
 )
-def delete_supplier(
+async def delete_supplier(
+    request: Request,
     supplier_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("Admin")),
 ):
     supplier = (
         db.query(Supplier)
@@ -264,16 +310,29 @@ def delete_supplier(
 
     if not supplier:
         raise HTTPException(
-            status_code=404,
-            detail="Supplier not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier not found.",
         )
 
     try:
+        sup_name = supplier.supplier_name
         db.delete(supplier)
+
+        audit = AuditLog(
+            user_id=current_user.id,
+            username=current_user.email,
+            role=current_user.role,
+            action=f"Deleted supplier ID #{supplier_id}: {sup_name}",
+            module="Suppliers",
+            target_id=str(supplier_id),
+            ip_address=request.client.host if request.client else None,
+        )
+        db.add(audit)
+
         db.commit()
 
         return {
-            "message": "Supplier deleted successfully"
+            "message": "Supplier deleted successfully."
         }
 
     except Exception:

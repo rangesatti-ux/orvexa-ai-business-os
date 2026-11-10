@@ -1,19 +1,21 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
+from app.dependencies.auth import get_current_user
 from app.dependencies.role import require_role
 from app.models.product import Product
 from app.models.purchase import Purchase, PurchaseItem
 from app.models.supplier import Supplier
+from app.models.user import User
+from app.models.audit_log import AuditLog
 from app.schemas.purchase import (
     PurchaseCreate,
     PurchaseResponse,
     PurchaseListResponse,
 )
-
 
 router = APIRouter(
     prefix="/purchases",
@@ -21,7 +23,7 @@ router = APIRouter(
 )
 
 
-def generate_purchase_number(db: Session):
+def generate_purchase_number(db: Session) -> str:
     today = datetime.now().strftime("%Y%m%d")
 
     count = (
@@ -44,11 +46,14 @@ def generate_purchase_number(db: Session):
 @router.post(
     "/",
     response_model=PurchaseResponse,
-    dependencies=[Depends(require_role("Admin", "HR"))],
+    status_code=status.HTTP_201_CREATED,
+    summary="Create Purchase Order",
 )
-def create_purchase(
+async def create_purchase(
+    request: Request,
     purchase: PurchaseCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("Admin", "HR")),
 ):
     supplier = (
         db.query(Supplier)
@@ -58,18 +63,20 @@ def create_purchase(
 
     if not supplier:
         raise HTTPException(
-            status_code=404,
-            detail="Supplier not found"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier not found.",
         )
 
     try:
-        subtotal = 0
+        subtotal = 0.0
 
         purchase_obj = Purchase(
             purchase_number=generate_purchase_number(db),
             supplier_id=purchase.supplier_id,
-            gst=purchase.gst,
-            discount=purchase.discount,
+            gst=purchase.gst or 0.0,
+            discount=purchase.discount or 0.0,
+            status="Received",
+            payment_status="Paid",
         )
 
         db.add(purchase_obj)
@@ -84,13 +91,14 @@ def create_purchase(
 
             if not product:
                 raise HTTPException(
-                    status_code=404,
-                    detail=f"Product {item.product_id} not found"
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Product with ID {item.product_id} not found.",
                 )
 
-            total = item.quantity * item.price
-            subtotal += total
+            item_total = round(item.quantity * item.price, 2)
+            subtotal += item_total
 
+            # Update inventory stock
             product.quantity += item.quantity
 
             purchase_item = PurchaseItem(
@@ -98,19 +106,27 @@ def create_purchase(
                 product_id=item.product_id,
                 quantity=item.quantity,
                 price=item.price,
-                total=total,
+                total=item_total,
             )
 
             db.add(purchase_item)
 
-        grand_total = (
-            subtotal
-            + (subtotal * purchase.gst / 100)
-            - purchase.discount
-        )
+        gst_amount = round(subtotal * (purchase.gst or 0.0) / 100.0, 2)
+        grand_total = round(subtotal + gst_amount - (purchase.discount or 0.0), 2)
 
-        purchase_obj.subtotal = subtotal
-        purchase_obj.grand_total = grand_total
+        purchase_obj.subtotal = round(subtotal, 2)
+        purchase_obj.grand_total = max(grand_total, 0.0)
+
+        audit = AuditLog(
+            user_id=current_user.id,
+            username=current_user.email,
+            role=current_user.role,
+            action=f"Created purchase order {purchase_obj.purchase_number} from supplier {supplier.supplier_name}",
+            module="Purchases",
+            target_id=str(purchase_obj.id),
+            ip_address=request.client.host if request.client else None,
+        )
+        db.add(audit)
 
         db.commit()
         db.refresh(purchase_obj)
@@ -120,7 +136,6 @@ def create_purchase(
     except HTTPException:
         db.rollback()
         raise
-
     except Exception:
         db.rollback()
         raise
@@ -132,18 +147,19 @@ def create_purchase(
 
 @router.get(
     "/",
-    response_model=PurchaseListResponse
+    response_model=PurchaseListResponse,
+    summary="Get Purchase Orders",
 )
-def get_purchases(
+async def get_purchases(
     page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1),
+    limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     query = db.query(Purchase)
 
     total = query.count()
-
-    total_pages = (total + limit - 1) // limit
+    total_pages = (total + limit - 1) // limit if total > 0 else 1
 
     purchases = (
         query
@@ -166,20 +182,27 @@ def get_purchases(
 # Purchase Dashboard
 # ===========================
 
-@router.get("/dashboard/stats")
-def purchase_dashboard(
+@router.get(
+    "/dashboard/stats",
+    summary="Purchase Dashboard Statistics",
+)
+async def purchase_dashboard(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    purchases = db.query(Purchase).all()
+    role = str(current_user.role or "").strip().casefold()
+    if role not in {"admin", "hr"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dashboard access requires Admin or HR role.",
+        )
 
-    total_amount = sum(
-        purchase.grand_total
-        for purchase in purchases
-    )
+    purchases = db.query(Purchase).all()
+    total_amount = sum((purchase.grand_total or 0.0) for purchase in purchases)
 
     return {
         "total_purchases": len(purchases),
-        "total_purchase_amount": total_amount,
+        "total_purchase_amount": round(total_amount, 2),
     }
 
 
@@ -189,11 +212,13 @@ def purchase_dashboard(
 
 @router.get(
     "/{purchase_id}",
-    response_model=PurchaseResponse
+    response_model=PurchaseResponse,
+    summary="Get Single Purchase Order",
 )
-def get_purchase(
+async def get_purchase(
     purchase_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     purchase = (
         db.query(Purchase)
@@ -203,8 +228,8 @@ def get_purchase(
 
     if not purchase:
         raise HTTPException(
-            status_code=404,
-            detail="Purchase not found"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Purchase record not found.",
         )
 
     return purchase
@@ -216,11 +241,14 @@ def get_purchase(
 
 @router.delete(
     "/{purchase_id}",
-    dependencies=[Depends(require_role("Admin"))],
+    response_model=dict,
+    summary="Delete Purchase Order (Admin Only)",
 )
-def delete_purchase(
+async def delete_purchase(
+    request: Request,
     purchase_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("Admin")),
 ):
     purchase = (
         db.query(Purchase)
@@ -230,8 +258,8 @@ def delete_purchase(
 
     if not purchase:
         raise HTTPException(
-            status_code=404,
-            detail="Purchase not found"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Purchase record not found.",
         )
 
     try:
@@ -243,13 +271,26 @@ def delete_purchase(
             )
 
             if product:
-                product.quantity -= item.quantity
+                product.quantity = max(product.quantity - item.quantity, 0)
 
+        po_number = purchase.purchase_number
         db.delete(purchase)
+
+        audit = AuditLog(
+            user_id=current_user.id,
+            username=current_user.email,
+            role=current_user.role,
+            action=f"Deleted purchase order #{purchase_id} ({po_number})",
+            module="Purchases",
+            target_id=str(purchase_id),
+            ip_address=request.client.host if request.client else None,
+        )
+        db.add(audit)
+
         db.commit()
 
         return {
-            "message": "Purchase deleted successfully"
+            "message": "Purchase order deleted successfully and inventory adjusted."
         }
 
     except Exception:

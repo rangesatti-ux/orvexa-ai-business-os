@@ -1,90 +1,92 @@
-
 from contextlib import asynccontextmanager
-
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
+from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.rate_limit import limiter
-from app.database.connection import Base, engine
+from app.database.connection import engine
 
-# Import models
-from app.models.user import User
-from app.models.employee import Employee
-from app.models.sale import Sale
-from app.models.sale_item import SaleItem
-from app.models.customer import Customer
-from app.models.supplier import Supplier
-from app.models.purchase import Purchase, PurchaseItem
-from app.models.attendance import Attendance
-from app.models.leave import Leave
-from app.models.payroll import Payroll
-from app.models.department import Department
-from app.models.task import Task
+# Import SQLAlchemy models to ensure metadata registration
+from app.models.user import User  # noqa: F401
+from app.models.employee import Employee  # noqa: F401
+from app.models.sale import Sale  # noqa: F401
+from app.models.sale_item import SaleItem  # noqa: F401
+from app.models.customer import Customer  # noqa: F401
+from app.models.supplier import Supplier  # noqa: F401
+from app.models.purchase import Purchase  # noqa: F401
+from app.models.attendance import Attendance  # noqa: F401
+from app.models.leave import Leave  # noqa: F401
+from app.models.payroll import Payroll  # noqa: F401
+from app.models.department import Department  # noqa: F401
+from app.models.task import Task  # noqa: F401
 
 # Import routers
 from app.routes import (
-    auth,
-    employee,
-    product,
-    sale,
-    customer,
-    supplier,
-    purchase,
-    attendance,
-    leave,
-    payroll,
-    reports,
-    analytics,
-    department,
-    task,
-    notification,
-    audit,
     ai,
+    analytics,
+    attendance,
+    audit,
+    auth,
+    customer,
+    department,
+    employee,
+    leave,
+    notification,
+    payroll,
+    product,
+    purchase,
+    reports,
+    sale,
+    supplier,
+    task,
 )
 
 # Import exception handlers
 from app.exceptions.handlers import register_exception_handlers
 
+logger = logging.getLogger("orvexa")
+
 
 # Application lifespan
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("Starting Orvexa AI Business OS...")
+    logger.info("Starting Orvexa AI Business OS API...")
     yield
-    print("Shutting down Orvexa AI Business OS...")
+    logger.info("Shutting down Orvexa AI Business OS API...")
 
 
-# Initialize FastAPI
+# Initialize FastAPI App
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="Orvexa AI Business OS API",
+    description="Orvexa AI Business OS Backend API Platform",
     lifespan=lifespan,
 )
 
 
-# CORS configuration
+# Normalize CORS origins
+configured_origins = list(settings.BACKEND_CORS_ORIGINS) if hasattr(settings, "BACKEND_CORS_ORIGINS") else []
+additional_origins = ["https://orvexa-ai-business-frontend.onrender.com", "http://localhost:5173", "http://localhost:3000"]
+all_origins = set([str(o).rstrip("/") for o in configured_origins + additional_origins if o])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS
-    + ["https://orvexa-ai-business-frontend.onrender.com"],
+    allow_origins=list(all_origins),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-# Rate limiter
+# Rate Limiter
 app.state.limiter = limiter
 
-
-# Register exception handlers
+# Register global exception handlers
 register_exception_handlers(app)
 
-
-# Register routers
+# Include All APIRouters
 app.include_router(auth.router)
 app.include_router(employee.router)
 app.include_router(product.router)
@@ -103,12 +105,11 @@ app.include_router(notification.router)
 app.include_router(audit.router)
 app.include_router(ai.router)
 
-
-# Prometheus monitoring
+# Prometheus Monitoring Metrics
 Instrumentator().instrument(app).expose(app)
 
 
-# Root endpoint
+# Root Endpoint
 @app.get("/")
 def root():
     return {
@@ -118,10 +119,19 @@ def root():
     }
 
 
-# Health check endpoint
+# Health Check Endpoint
 @app.get("/health")
 def health_check():
+    db_status = "healthy"
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}")
+        db_status = "unreachable"
+
     return {
-        "status": "healthy",
-        "database": "configured",
+        "status": "healthy" if db_status == "healthy" else "degraded",
+        "database": db_status,
+        "version": settings.APP_VERSION,
     }

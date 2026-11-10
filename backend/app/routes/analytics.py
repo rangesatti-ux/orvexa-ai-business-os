@@ -15,7 +15,6 @@ from app.models.supplier import Supplier
 from app.models.user import User
 from app.services.ai_service import generate_ai_insights
 
-
 router = APIRouter(
     prefix="/analytics",
     tags=["Analytics"],
@@ -38,7 +37,7 @@ def dashboard(
         db.query(
             func.coalesce(
                 func.sum(Payroll.net_salary),
-                0,
+                0.0,
             )
         )
         .scalar()
@@ -48,7 +47,7 @@ def dashboard(
         db.query(
             func.coalesce(
                 func.sum(Sale.grand_total),
-                0,
+                0.0,
             )
         )
         .scalar()
@@ -58,7 +57,7 @@ def dashboard(
         db.query(
             func.coalesce(
                 func.sum(Purchase.grand_total),
-                0,
+                0.0,
             )
         )
         .scalar()
@@ -66,14 +65,12 @@ def dashboard(
 
     low_stock = (
         db.query(Product)
-        .filter(Product.quantity < 10)
+        .filter(Product.quantity <= Product.min_stock_level)
         .count()
     )
 
-    estimated_profit = (
-        total_revenue
-        - total_purchase_amount
-        - total_payroll
+    estimated_profit = round(
+        total_revenue - total_purchase_amount - total_payroll, 2
     )
 
     return {
@@ -83,9 +80,9 @@ def dashboard(
         "products": total_products,
         "sales": total_sales,
         "purchases": total_purchases,
-        "revenue": total_revenue,
-        "purchase_amount": total_purchase_amount,
-        "payroll_expense": total_payroll,
+        "revenue": round(total_revenue, 2),
+        "purchase_amount": round(total_purchase_amount, 2),
+        "payroll_expense": round(total_payroll, 2),
         "estimated_profit": estimated_profit,
         "low_stock_products": low_stock,
     }
@@ -98,7 +95,7 @@ def low_stock_products(
 ):
     products = (
         db.query(Product)
-        .filter(Product.quantity < 10)
+        .filter(Product.quantity <= Product.min_stock_level)
         .all()
     )
 
@@ -106,7 +103,9 @@ def low_stock_products(
         {
             "id": product.id,
             "product_name": product.product_name,
+            "name": product.product_name,
             "quantity": product.quantity,
+            "min_stock_level": product.min_stock_level,
             "category": product.category,
         }
         for product in products
@@ -122,7 +121,7 @@ def finance_summary(
         db.query(
             func.coalesce(
                 func.sum(Sale.grand_total),
-                0,
+                0.0,
             )
         )
         .scalar()
@@ -132,7 +131,7 @@ def finance_summary(
         db.query(
             func.coalesce(
                 func.sum(Purchase.grand_total),
-                0,
+                0.0,
             )
         )
         .scalar()
@@ -142,22 +141,18 @@ def finance_summary(
         db.query(
             func.coalesce(
                 func.sum(Payroll.net_salary),
-                0,
+                0.0,
             )
         )
         .scalar()
     )
 
-    estimated_profit = (
-        revenue
-        - purchases
-        - payroll
-    )
+    estimated_profit = round(revenue - purchases - payroll, 2)
 
     return {
-        "revenue": revenue,
-        "purchase_expense": purchases,
-        "payroll_expense": payroll,
+        "revenue": round(revenue, 2),
+        "purchase_expense": round(purchases, 2),
+        "payroll_expense": round(payroll, 2),
         "estimated_profit": estimated_profit,
     }
 
@@ -176,9 +171,7 @@ def top_products(
         db.query(
             Product.id,
             Product.product_name,
-            func.sum(
-                SaleItem.quantity
-            ).label("total_sold"),
+            func.coalesce(func.sum(SaleItem.quantity), 0).label("total_sold"),
         )
         .join(
             SaleItem,
@@ -189,9 +182,7 @@ def top_products(
             Product.product_name,
         )
         .order_by(
-            func.sum(
-                SaleItem.quantity
-            ).desc()
+            func.sum(SaleItem.quantity).desc()
         )
         .limit(limit)
         .all()
@@ -201,6 +192,7 @@ def top_products(
         {
             "product_id": product.id,
             "product_name": product.product_name,
+            "name": product.product_name,
             "total_sold": int(product.total_sold),
         }
         for product in products
@@ -208,10 +200,11 @@ def top_products(
 
 
 @router.get("/ai-insights")
-def ai_insights(
+async def ai_insights(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    insights = await generate_ai_insights(db, user=current_user)
     return {
-        "insights": generate_ai_insights(db)
+        "insights": insights
     }

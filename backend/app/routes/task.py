@@ -5,18 +5,12 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
 from app.dependencies.auth import get_current_user
+from app.dependencies.role import require_role
 from app.models.employee import Employee
 from app.models.task import Task
 from app.models.user import User
-from app.schemas.task import TaskCreate, TaskResponse, TaskStatusUpdate, TaskUpdate
+from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
 from app.services.audit_service import create_audit_log
-
-# Compatibility layer for role dependencies
-try:
-    from app.dependencies.role import require_role
-except ImportError:
-    from app.dependencies.role import require_roles as require_role
-
 
 router = APIRouter(
     prefix="/tasks",
@@ -36,21 +30,19 @@ def get_my_employee(
 
 
 # CREATE TASK
-# Admin, HR, Manager
 @router.post(
     "/",
     response_model=TaskResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create Task",
 )
-def create_task(
+async def create_task(
     task_data: TaskCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["Admin", "HR", "Manager"] if isinstance(require_role, type) else "Manager")),
+    current_user: User = Depends(require_role("Admin", "HR", "Manager")),
 ):
     create_dict = task_data.model_dump()
 
-    # Link employee profile if assigned_to_id is provided
     if "assigned_to_id" in create_dict and create_dict["assigned_to_id"]:
         employee = (
             db.query(Employee)
@@ -64,7 +56,6 @@ def create_task(
             )
         create_dict["employee"] = employee.full_name
 
-    # Safely strip fields not mapped in the Task model schema
     if not hasattr(Task, "assigned_to_id"):
         create_dict.pop("assigned_to_id", None)
 
@@ -83,7 +74,6 @@ def create_task(
 
         db.commit()
         db.refresh(task)
-
         return task
 
     except Exception:
@@ -97,7 +87,7 @@ def create_task(
     response_model=list[TaskResponse],
     summary="Get Tasks",
 )
-def get_tasks(
+async def get_tasks(
     search: Optional[str] = Query(default=None),
     status_filter: Optional[str] = Query(default=None, alias="status"),
     priority: Optional[str] = Query(default=None),
@@ -145,7 +135,7 @@ def get_tasks(
     "/dashboard/stats",
     summary="Get Task Statistics",
 )
-def get_task_stats(
+async def get_task_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -174,9 +164,9 @@ def get_task_stats(
 
     return {
         "total_tasks": len(tasks),
-        "completed": sum(t.status == "Completed" for t in tasks),
-        "in_progress": sum(t.status == "In Progress" for t in tasks),
-        "pending": sum(t.status == "Pending" for t in tasks),
+        "completed": sum(1 for t in tasks if str(t.status).strip().casefold() == "completed"),
+        "in_progress": sum(1 for t in tasks if str(t.status).strip().casefold() == "in progress"),
+        "pending": sum(1 for t in tasks if str(t.status).strip().casefold() == "pending"),
     }
 
 
@@ -186,7 +176,7 @@ def get_task_stats(
     response_model=TaskResponse,
     summary="Get Single Task",
 )
-def get_task(
+async def get_task(
     task_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -225,7 +215,7 @@ def get_task(
     response_model=TaskResponse,
     summary="Update Task",
 )
-def update_task(
+async def update_task(
     task_id: int,
     task_data: TaskUpdate,
     db: Session = Depends(get_db),
@@ -294,7 +284,6 @@ def update_task(
 
         db.commit()
         db.refresh(task)
-
         return task
 
     except Exception:
@@ -307,10 +296,10 @@ def update_task(
     "/{task_id}",
     summary="Delete Task",
 )
-def delete_task(
+async def delete_task(
     task_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["Admin", "HR", "Manager"] if isinstance(require_role, type) else "Manager")),
+    current_user: User = Depends(require_role("Admin", "HR", "Manager")),
 ):
     task = db.query(Task).filter(Task.id == task_id).first()
 

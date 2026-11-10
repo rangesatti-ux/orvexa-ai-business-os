@@ -10,19 +10,34 @@ from pydantic import (
 
 
 class LeaveCreate(BaseModel):
-    employee_id: Optional[int] = Field(default=None, gt=0)
+    model_config = ConfigDict(populate_by_name=True)
 
-    leave_type: str = Field(
-        min_length=2,
-        max_length=50,
+    employee_id: Optional[int] = Field(
+        default=None,
+        gt=0,
+        description="Optional employee ID when applying on behalf of someone else (Admin/HR).",
     )
 
-    start_date: date
-    end_date: date
+    leave_type: str = Field(
+        ...,
+        min_length=2,
+        max_length=50,
+        description="Type of leave (e.g., Casual Leave, Sick Leave, Paid Leave).",
+    )
+
+    start_date: date = Field(
+        ...,
+        description="Start date of the leave period.",
+    )
+    end_date: date = Field(
+        ...,
+        description="End date of the leave period.",
+    )
 
     reason: Optional[str] = Field(
         default=None,
         max_length=500,
+        description="Reason or justification for taking leave.",
     )
 
     @model_validator(mode="after")
@@ -33,26 +48,37 @@ class LeaveCreate(BaseModel):
 
 
 class LeaveStatusUpdate(BaseModel):
-    status: Literal["Approved", "Rejected"]
-    rejection_reason: Optional[str] = Field(default=None, max_length=255)
+    model_config = ConfigDict(populate_by_name=True)
+
+    status: Literal["Approved", "Rejected"] = Field(
+        ...,
+        description="New review status for the leave request.",
+    )
+    rejection_reason: Optional[str] = Field(
+        default=None,
+        max_length=255,
+        description="Reason for rejection if the leave request is rejected.",
+    )
 
 
 class LeaveResponse(BaseModel):
-    id: int
-    employee_id: int
-    leave_type: str
-    start_date: date
-    end_date: date
-    reason: Optional[str] = None
-    status: str
-    rejection_reason: Optional[str] = None
-    created_at: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
-    model_config = ConfigDict(from_attributes=True)
+    id: int = Field(..., description="Unique leave request ID.")
+    employee_id: int = Field(..., description="ID of the employee requesting leave.")
+    leave_type: str = Field(..., description="Type of leave.")
+    start_date: date = Field(..., description="Start date.")
+    end_date: date = Field(..., description="End date.")
+    reason: Optional[str] = Field(default=None, description="Reason for leave.")
+    status: str = Field(..., description="Current request status (Pending, Approved, Rejected).")
+    rejection_reason: Optional[str] = Field(default=None, description="Rejection note if applicable.")
+    created_at: Optional[datetime] = Field(default=None, description="Timestamp of request creation.")
 
 
 class LeaveStats(BaseModel):
-    total_requested: int
-    approved: int
-    pending: int
-    rejected: int
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    total_requested: int = Field(..., description="Total number of leave requests.")
+    approved: int = Field(..., description="Total approved leave requests.")
+    pending: int = Field(..., description="Total pending leave requests.")
+    rejected: int = Field(..., description="Total rejected leave requests.")

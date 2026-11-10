@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.database.connection import get_db
 from app.dependencies.auth import get_current_user
+from app.dependencies.role import require_role
 from app.models.department import Department
 from app.models.employee import Employee
 from app.models.user import User
@@ -15,13 +16,6 @@ from app.schemas.department import (
     DepartmentUpdate,
 )
 from app.services.audit_service import create_audit_log
-
-# Compatibility layer for role dependencies
-try:
-    from app.dependencies.role import require_role
-except ImportError:
-    from app.dependencies.role import require_roles as require_role
-
 
 router = APIRouter(
     prefix="/departments",
@@ -63,6 +57,7 @@ def attach_employee_count(department: Department, db: Session) -> dict:
         "id": department.id,
         "department_code": department.department_code,
         "department_name": department.department_name,
+        "name": department.department_name,
         "description": getattr(department, "description", None),
         "manager_name": getattr(department, "manager_name", None),
         "manager_id": getattr(department, "manager_id", None),
@@ -74,17 +69,16 @@ def attach_employee_count(department: Department, db: Session) -> dict:
 
 
 # CREATE DEPARTMENT
-# Admin / HR only
 @router.post(
     "/",
     response_model=DepartmentResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create Department",
 )
-def create_department(
+async def create_department(
     department: DepartmentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["Admin", "HR"] if isinstance(require_role, type) else "HR")),
+    current_user: User = Depends(require_role("Admin", "HR")),
 ):
     department_code = normalize_department_code(
         department.department_code
@@ -146,13 +140,12 @@ def create_department(
 
 
 # GET ALL DEPARTMENTS
-# All authenticated users
 @router.get(
     "/",
     response_model=list[DepartmentResponse],
     summary="Get All Departments",
 )
-def get_departments(
+async def get_departments(
     search: Optional[str] = Query(default=None, max_length=150),
     status_filter: Optional[str] = Query(
         default=None,
@@ -165,7 +158,6 @@ def get_departments(
 
     if search:
         search_pattern = f"%{search.strip()}%"
-
         query = query.filter(
             (Department.department_code.ilike(search_pattern))
             | (Department.department_name.ilike(search_pattern))
@@ -173,14 +165,13 @@ def get_departments(
         )
 
     if status_filter:
-        if status_filter not in {"Active", "Inactive"}:
+        if status_filter.capitalize() not in {"Active", "Inactive"}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid department status.",
+                detail="Invalid department status filter.",
             )
-
         query = query.filter(
-            Department.status == status_filter
+            Department.status == status_filter.capitalize()
         )
 
     departments = (
@@ -194,13 +185,12 @@ def get_departments(
 
 
 # GET SINGLE DEPARTMENT
-# All authenticated users
 @router.get(
     "/{department_id}",
     response_model=DepartmentResponse,
     summary="Get Single Department",
 )
-def get_department(
+async def get_department(
     department_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -210,17 +200,16 @@ def get_department(
 
 
 # UPDATE DEPARTMENT
-# Admin / HR only
 @router.put(
     "/{department_id}",
     response_model=DepartmentResponse,
     summary="Update Department",
 )
-def update_department(
+async def update_department(
     department_id: int,
     department_data: DepartmentUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["Admin", "HR"] if isinstance(require_role, type) else "HR")),
+    current_user: User = Depends(require_role("Admin", "HR")),
 ):
     department = get_department_or_404(department_id, db)
 
@@ -296,16 +285,14 @@ def update_department(
 
 
 # DEACTIVATE DEPARTMENT
-# Admin only
-# Preserves department history and employee references
 @router.delete(
     "/{department_id}",
     summary="Deactivate Department",
 )
-def deactivate_department(
+async def deactivate_department(
     department_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["Admin"] if isinstance(require_role, type) else "Admin")),
+    current_user: User = Depends(require_role("Admin")),
 ):
     department = get_department_or_404(department_id, db)
 

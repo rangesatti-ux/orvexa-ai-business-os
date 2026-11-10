@@ -23,13 +23,7 @@ from app.schemas.employee import (
 )
 from app.services.audit_service import create_audit_log
 from app.utils.security import hash_password
-
-# Compatibility layer for role dependencies
-try:
-    from app.dependencies.role import require_role
-except ImportError:
-    from app.dependencies.role import require_roles as require_role
-
+from app.dependencies.role import require_role
 
 router = APIRouter(
     prefix="/employees",
@@ -67,13 +61,6 @@ def get_eligible_manager(
     db: Session,
     manager_id: int,
 ) -> Employee:
-    """
-    Validate that the selected manager:
-    - Exists as an employee.
-    - Is active.
-    - Has a linked active user account.
-    - Has the Manager role.
-    """
     manager = (
         db.query(Employee)
         .filter(Employee.id == manager_id)
@@ -118,9 +105,6 @@ def validate_manager_assignment(
     employee_id: int,
     manager_id: int,
 ) -> Employee:
-    """
-    Validate a manager assignment and prevent reporting cycles.
-    """
     if employee_id == manager_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -161,7 +145,6 @@ def validate_manager_assignment(
 
 # --------------------------------------------------
 # CREATE EMPLOYEE + LOGIN ACCOUNT
-# Admin and HR only
 # --------------------------------------------------
 
 @router.post(
@@ -170,7 +153,7 @@ def validate_manager_assignment(
     status_code=status.HTTP_201_CREATED,
     summary="Create Employee and Login Account",
 )
-def create_employee(
+async def create_employee(
     employee: EmployeeCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("Admin", "HR")),
@@ -179,16 +162,10 @@ def create_employee(
     normalized_employee_id = employee.employee_id.strip()
     normalized_name = employee.full_name.strip()
 
-    if not normalized_employee_id:
+    if not normalized_employee_id or not normalized_name:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Employee ID cannot be empty.",
-        )
-
-    if not normalized_name:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Employee name cannot be empty.",
+            detail="Employee ID and Name cannot be empty.",
         )
 
     existing_employee = (
@@ -215,20 +192,12 @@ def create_employee(
         )
 
     department = None
-
     if employee.department_id is not None:
-        department = get_active_department(
-            db,
-            employee.department_id,
-        )
+        department = get_active_department(db, employee.department_id)
 
     manager = None
-
     if employee.manager_id is not None:
-        manager = get_eligible_manager(
-            db,
-            employee.manager_id,
-        )
+        manager = get_eligible_manager(db, employee.manager_id)
 
     try:
         new_user = User(
@@ -253,11 +222,7 @@ def create_employee(
             department=(
                 department.department_name
                 if department
-                else (
-                    employee.department.strip()
-                    if employee.department
-                    else None
-                )
+                else (employee.department.strip() if employee.department else None)
             ),
             position=employee.position,
             salary=employee.salary,
@@ -272,19 +237,11 @@ def create_employee(
             db=db,
             username=current_user.email,
             module="Employee",
-            action=(
-                f"Created employee {new_employee.full_name}"
-                + (
-                    f" and assigned manager {manager.full_name}"
-                    if manager
-                    else ""
-                )
-            ),
+            action=f"Created employee {new_employee.full_name}" + (f" with manager {manager.full_name}" if manager else ""),
         )
 
         db.commit()
         db.refresh(new_employee)
-
         return new_employee
 
     except IntegrityError:
@@ -293,7 +250,6 @@ def create_employee(
             status_code=status.HTTP_409_CONFLICT,
             detail="Employee ID or email already exists.",
         )
-
     except Exception:
         db.rollback()
         raise
@@ -301,8 +257,6 @@ def create_employee(
 
 # --------------------------------------------------
 # GET EMPLOYEE LIST
-# Admin / HR: all employees
-# Manager / Employee: own profile for now
 # --------------------------------------------------
 
 @router.get(
@@ -310,7 +264,7 @@ def create_employee(
     response_model=EmployeeListResponse,
     summary="Get Employees",
 )
-def get_employees(
+async def get_employees(
     search: str | None = Query(default=None),
     department: str | None = Query(default=None),
     department_id: int | None = Query(default=None, gt=0),
@@ -322,73 +276,51 @@ def get_employees(
     current_user: User = Depends(get_current_user),
 ):
     role = str(current_user.role or "").strip().casefold()
-
     query = db.query(Employee)
 
     if role not in {"admin", "hr"}:
-        query = query.filter(
-            Employee.user_id == current_user.id
-        )
+        query = query.filter(Employee.user_id == current_user.id)
 
     if search:
-        search = search.strip()
-
-        if search:
-            query = query.filter(
-                or_(
-                    Employee.full_name.ilike(f"%{search}%"),
-                    Employee.employee_id.ilike(f"%{search}%"),
-                )
+        search_term = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                Employee.full_name.ilike(search_term),
+                Employee.employee_id.ilike(search_term),
+                Employee.email.ilike(search_term),
             )
+        )
 
     if department_id is not None:
-        query = query.filter(
-            Employee.department_id == department_id
-        )
-
+        query = query.filter(Employee.department_id == department_id)
     elif department:
-        query = query.filter(
-            Employee.department.ilike(
-                f"%{department.strip()}%"
-            )
-        )
+        query = query.filter(Employee.department.ilike(f"%{department.strip()}%"))
 
     if status_filter:
-        if status_filter not in {"Active", "Inactive"}:
+        if status_filter.capitalize() not in {"Active", "Inactive"}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid employee status filter.",
             )
-
-        query = query.filter(
-            Employee.status == status_filter
-        )
+        query = query.filter(Employee.status == status_filter.capitalize())
 
     if sort_by == "full_name":
         query = query.order_by(Employee.full_name)
-
     elif sort_by == "salary":
         if role not in {"admin", "hr"}:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You cannot sort by salary.",
             )
-
         query = query.order_by(Employee.salary)
-
     elif sort_by == "joining_date":
         query = query.order_by(Employee.joining_date)
 
     total = query.count()
-    total_pages = (total + limit - 1) // limit
+    total_pages = (total + limit - 1) // limit if total > 0 else 1
     skip = (page - 1) * limit
 
-    employees = (
-        query
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    employees = query.offset(skip).limit(limit).all()
 
     return {
         "total": total,
@@ -401,15 +333,14 @@ def get_employees(
 
 # --------------------------------------------------
 # GET SINGLE EMPLOYEE
-# Admin / HR: any employee
-# Manager / Employee: own profile only
 # --------------------------------------------------
 
 @router.get(
     "/{employee_id}",
     response_model=EmployeeResponse,
+    summary="Get Single Employee",
 )
-def get_employee(
+async def get_employee(
     employee_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -427,11 +358,7 @@ def get_employee(
         )
 
     role = str(current_user.role or "").strip().casefold()
-
-    if (
-        role not in {"admin", "hr"}
-        and employee.user_id != current_user.id
-    ):
+    if role not in {"admin", "hr"} and employee.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You cannot access this employee profile.",
@@ -442,8 +369,6 @@ def get_employee(
 
 # --------------------------------------------------
 # UPDATE EMPLOYEE
-# Admin / HR only
-# Supports manager assignment and reassignment
 # --------------------------------------------------
 
 @router.put(
@@ -451,7 +376,7 @@ def get_employee(
     response_model=EmployeeResponse,
     summary="Update Employee",
 )
-def update_employee(
+async def update_employee(
     employee_id: int,
     employee_data: EmployeeUpdate,
     db: Session = Depends(get_db),
@@ -469,57 +394,32 @@ def update_employee(
             detail="Employee not found.",
         )
 
-    update_data = employee_data.model_dump(
-        exclude_unset=True
-    )
+    update_data = employee_data.model_dump(exclude_unset=True)
 
     if "full_name" in update_data:
-        if update_data["full_name"] is None:
+        if not update_data["full_name"] or not update_data["full_name"].strip():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Employee name cannot be empty.",
             )
-
         update_data["full_name"] = update_data["full_name"].strip()
 
-        if not update_data["full_name"]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Employee name cannot be empty.",
-            )
-
     if "email" in update_data:
-        if update_data["email"] is None:
+        if not update_data["email"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Employee email cannot be empty.",
             )
-
-        normalized_email = normalize_email(
-            update_data["email"]
-        )
-
-        if not normalized_email:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Employee email cannot be empty.",
-            )
+        normalized_email = normalize_email(update_data["email"])
 
         duplicate_employee = (
             db.query(Employee)
-            .filter(
-                Employee.email == normalized_email,
-                Employee.id != employee_id,
-            )
+            .filter(Employee.email == normalized_email, Employee.id != employee_id)
             .first()
         )
-
         duplicate_user = (
             db.query(User)
-            .filter(
-                User.email == normalized_email,
-                User.id != employee.user_id,
-            )
+            .filter(User.email == normalized_email, User.id != employee.user_id)
             .first()
         )
 
@@ -528,46 +428,21 @@ def update_employee(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Email already exists.",
             )
-
         update_data["email"] = normalized_email
 
-    # Validate department assignment.
     if "department_id" in update_data:
         department_id = update_data["department_id"]
-
         if department_id is None:
             update_data["department"] = None
-
         else:
-            department = get_active_department(
-                db,
-                department_id,
-            )
-
+            department = get_active_department(db, department_id)
             update_data["department"] = department.department_name
 
-    elif "department" in update_data:
-        # Legacy text-only department update.
-        update_data["department_id"] = None
-
-        if update_data["department"] is not None:
-            update_data["department"] = (
-                update_data["department"].strip() or None
-            )
-
-    # Validate manager assignment or reassignment.
     old_manager_id = employee.manager_id
     manager_changed = "manager_id" in update_data
 
-    if manager_changed:
-        new_manager_id = update_data["manager_id"]
-
-        if new_manager_id is not None:
-            validate_manager_assignment(
-                db=db,
-                employee_id=employee.id,
-                manager_id=new_manager_id,
-            )
+    if manager_changed and update_data["manager_id"] is not None:
+        validate_manager_assignment(db=db, employee_id=employee.id, manager_id=update_data["manager_id"])
 
     if "status" in update_data:
         if update_data["status"] not in {"Active", "Inactive"}:
@@ -580,36 +455,15 @@ def update_employee(
         for key, value in update_data.items():
             setattr(employee, key, value)
 
-        # Synchronize login account details.
         if employee.user:
             if "full_name" in update_data:
                 employee.user.full_name = update_data["full_name"]
-
             if "email" in update_data:
                 employee.user.email = update_data["email"]
-
             if "status" in update_data:
-                employee.user.is_active = (
-                    update_data["status"] == "Active"
-                )
+                employee.user.is_active = (update_data["status"] == "Active")
 
         audit_action = f"Updated employee {employee.full_name}"
-
-        if manager_changed:
-            if employee.manager_id is None:
-                audit_action += " and removed the assigned manager"
-            elif old_manager_id is None:
-                audit_action += (
-                    f" and assigned manager employee ID "
-                    f"{employee.manager_id}"
-                )
-            elif old_manager_id != employee.manager_id:
-                audit_action += (
-                    f" and changed manager from employee ID "
-                    f"{old_manager_id} to employee ID "
-                    f"{employee.manager_id}"
-                )
-
         create_audit_log(
             db=db,
             username=current_user.email,
@@ -619,19 +473,14 @@ def update_employee(
 
         db.commit()
         db.refresh(employee)
-
         return employee
 
     except IntegrityError:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "Employee email already exists or conflicts "
-                "with another account."
-            ),
+            detail="Employee email already exists or conflicts with another account.",
         )
-
     except Exception:
         db.rollback()
         raise
@@ -639,7 +488,6 @@ def update_employee(
 
 # --------------------------------------------------
 # CONTROLLED MANAGER REASSIGNMENT
-# Admin and HR only
 # --------------------------------------------------
 
 @router.patch(
@@ -647,7 +495,7 @@ def update_employee(
     response_model=EmployeeResponse,
     summary="Reassign Employee Manager",
 )
-def reassign_manager(
+async def reassign_manager(
     employee_id: int,
     manager_id: Optional[int] = Query(default=None),
     db: Session = Depends(get_db),
@@ -666,11 +514,7 @@ def reassign_manager(
         )
 
     if manager_id is not None:
-        validate_manager_assignment(
-            db=db,
-            employee_id=employee.id,
-            manager_id=manager_id,
-        )
+        validate_manager_assignment(db=db, employee_id=employee.id, manager_id=manager_id)
 
     old_manager_id = employee.manager_id
     employee.manager_id = manager_id
@@ -679,10 +523,7 @@ def reassign_manager(
         db=db,
         username=current_user.email,
         module="Employee",
-        action=(
-            f"Reassigned manager for {employee.full_name} from "
-            f"{old_manager_id} to {manager_id}"
-        ),
+        action=f"Reassigned manager for {employee.full_name} from {old_manager_id} to {manager_id}",
     )
 
     db.commit()
@@ -691,9 +532,7 @@ def reassign_manager(
 
 
 # --------------------------------------------------
-# SOFT DELETE EMPLOYEE
-# Admin only
-# Preserve attendance, leave and payroll history
+# DEACTIVATE EMPLOYEE
 # --------------------------------------------------
 
 @router.delete(
@@ -701,7 +540,7 @@ def reassign_manager(
     response_model=dict,
     summary="Deactivate Employee",
 )
-def delete_employee(
+async def delete_employee(
     employee_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("Admin")),
@@ -726,7 +565,6 @@ def delete_employee(
 
     try:
         employee.status = "Inactive"
-
         if employee.user:
             employee.user.is_active = False
 
@@ -738,7 +576,6 @@ def delete_employee(
         )
 
         db.commit()
-
         return {
             "message": "Employee deactivated successfully.",
             "employee_id": employee.employee_id,

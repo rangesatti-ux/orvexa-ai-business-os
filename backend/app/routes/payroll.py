@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
 from app.dependencies.auth import get_current_user
+from app.dependencies.role import require_role
 from app.models.employee import Employee
 from app.models.payroll import Payroll
 from app.models.user import User
@@ -21,13 +22,6 @@ from app.schemas.payroll import (
     PayrollListResponse,
 )
 from app.services.audit_service import create_audit_log
-
-# Compatibility layer for role dependencies
-try:
-    from app.dependencies.role import require_role
-except ImportError:
-    from app.dependencies.role import require_roles as require_role
-
 
 router = APIRouter(
     prefix="/payroll",
@@ -53,7 +47,7 @@ def get_my_employee(
 
     is_active = getattr(employee, "is_active", True)
     emp_status = getattr(employee, "status", "Active")
-    if not is_active or emp_status != "Active":
+    if not is_active or str(emp_status).strip().casefold() != "active":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your employee account is inactive.",
@@ -64,7 +58,6 @@ def get_my_employee(
 
 # ===========================
 # Generate Payroll
-# Admin and HR only
 # ===========================
 
 @router.post(
@@ -73,10 +66,10 @@ def get_my_employee(
     status_code=status.HTTP_201_CREATED,
     summary="Generate Payroll",
 )
-def generate_payroll(
+async def generate_payroll(
     payroll_in: PayrollCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["Admin", "HR"] if isinstance(require_role, type) else "HR")),
+    current_user: User = Depends(require_role("Admin", "HR")),
 ):
     employee = (
         db.query(Employee)
@@ -101,16 +94,17 @@ def generate_payroll(
 
     if existing:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Payroll already generated for this month.",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Payroll already generated for this employee and month.",
         )
 
-    net_salary = (
+    net_salary = round(
         payroll_in.basic_salary
         + payroll_in.hra
         + payroll_in.allowance
         + payroll_in.bonus
-        - payroll_in.deduction
+        - payroll_in.deduction,
+        2,
     )
 
     try:
@@ -123,6 +117,7 @@ def generate_payroll(
             bonus=payroll_in.bonus,
             deduction=payroll_in.deduction,
             net_salary=net_salary,
+            status="Pending",
         )
 
         db.add(payroll_record)
@@ -137,7 +132,6 @@ def generate_payroll(
 
         db.commit()
         db.refresh(payroll_record)
-
         return payroll_record
 
     except Exception:
@@ -146,9 +140,7 @@ def generate_payroll(
 
 
 # ===========================
-# Get Payrolls
-# Admin / HR: all payroll records
-# Employee: own payroll records
+# Get Payroll Records
 # ===========================
 
 @router.get(
@@ -156,7 +148,7 @@ def generate_payroll(
     response_model=PayrollListResponse,
     summary="Get Payroll Records",
 )
-def get_payrolls(
+async def get_payrolls(
     employee_id: Optional[int] = Query(default=None, gt=0),
     month: Optional[str] = Query(default=None),
     page: int = Query(default=1, ge=1),
@@ -172,7 +164,7 @@ def get_payrolls(
         if employee_id is not None and employee_id != employee.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You cannot view another employee's payroll.",
+                detail="You cannot view another employee's payroll statement.",
             )
         query = query.filter(Payroll.employee_id == employee.id)
     elif employee_id is not None:
@@ -182,7 +174,7 @@ def get_payrolls(
         query = query.filter(Payroll.month == month)
 
     total = query.count()
-    total_pages = (total + limit - 1) // limit
+    total_pages = (total + limit - 1) // limit if total > 0 else 1
     skip = (page - 1) * limit
 
     payrolls = (
@@ -204,14 +196,13 @@ def get_payrolls(
 
 # ===========================
 # Payroll Dashboard
-# Admin and HR only
 # ===========================
 
 @router.get(
     "/dashboard/stats",
     summary="Payroll Dashboard Statistics",
 )
-def payroll_dashboard(
+async def payroll_dashboard(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -223,8 +214,7 @@ def payroll_dashboard(
         )
 
     payrolls = db.query(Payroll).all()
-
-    total_payroll = sum(payroll.net_salary for payroll in payrolls)
+    total_payroll = sum((payroll.net_salary or 0.0) for payroll in payrolls)
 
     return {
         "employees_paid": len(payrolls),
@@ -241,7 +231,7 @@ def payroll_dashboard(
     response_model=PayrollResponse,
     summary="Get Single Payroll Record",
 )
-def get_payroll(
+async def get_payroll(
     payroll_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -273,7 +263,6 @@ def get_payroll(
 
 # ===========================
 # Update Payroll
-# Admin and HR only
 # ===========================
 
 @router.put(
@@ -281,11 +270,11 @@ def get_payroll(
     response_model=PayrollResponse,
     summary="Update Payroll Record",
 )
-def update_payroll(
+async def update_payroll(
     payroll_id: int,
     payroll_in: PayrollUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["Admin", "HR"] if isinstance(require_role, type) else "HR")),
+    current_user: User = Depends(require_role("Admin", "HR")),
 ):
     payroll = (
         db.query(Payroll)
@@ -305,13 +294,13 @@ def update_payroll(
         for key, value in update_data.items():
             setattr(payroll, key, value)
 
-        # Recalculate net salary if financial fields were updated
+        # Recalculate net salary dynamically
         payroll.net_salary = round(
-            payroll.basic_salary
-            + payroll.hra
-            + payroll.allowance
-            + payroll.bonus
-            - payroll.deduction,
+            (payroll.basic_salary or 0.0)
+            + (payroll.hra or 0.0)
+            + (payroll.allowance or 0.0)
+            + (payroll.bonus or 0.0)
+            - (payroll.deduction or 0.0),
             2,
         )
 
@@ -324,7 +313,6 @@ def update_payroll(
 
         db.commit()
         db.refresh(payroll)
-
         return payroll
 
     except Exception:
@@ -334,17 +322,16 @@ def update_payroll(
 
 # ===========================
 # Delete Payroll
-# Admin only
 # ===========================
 
 @router.delete(
     "/{payroll_id}",
     summary="Delete Payroll Record",
 )
-def delete_payroll(
+async def delete_payroll(
     payroll_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["Admin"] if isinstance(require_role, type) else "Admin")),
+    current_user: User = Depends(require_role("Admin")),
 ):
     payroll = (
         db.query(Payroll)
