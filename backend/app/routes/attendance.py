@@ -118,13 +118,13 @@ def check_in(
     current_user: User = Depends(get_current_user),
 ):
     employee = get_my_employee(db, current_user)
-    target_id = request.employee_id or employee.id
-
-    if employee.id != target_id and str(current_user.role).strip().casefold() not in {"admin", "hr"}:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only check in for your own employee account.",
-        )
+    
+    # Automatically enforce verified employee record ID for managers and employees
+    role_str = str(current_user.role or "").strip().casefold()
+    if role_str in {"admin", "hr"} and request.employee_id:
+        target_id = request.employee_id
+    else:
+        target_id = employee.id
 
     now = get_local_now()
     today = now.date()
@@ -191,13 +191,12 @@ def check_out(
     current_user: User = Depends(get_current_user),
 ):
     employee = get_my_employee(db, current_user)
-    target_id = request.employee_id or employee.id
-
-    if employee.id != target_id and str(current_user.role).strip().casefold() not in {"admin", "hr"}:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only check out your own employee account.",
-        )
+    
+    role_str = str(current_user.role or "").strip().casefold()
+    if role_str in {"admin", "hr"} and request.employee_id:
+        target_id = request.employee_id
+    else:
+        target_id = employee.id
 
     attendance = (
         db.query(Attendance)

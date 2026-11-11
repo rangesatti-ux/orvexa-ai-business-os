@@ -27,7 +27,7 @@ async def ai_chat(
         )
 
     try:
-        response_text = await generate_ai_response(
+        response_text = generate_ai_response(
             db=db,
             user_message=cleaned_message,
             user=current_user,

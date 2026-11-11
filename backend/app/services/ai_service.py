@@ -16,47 +16,40 @@ def generate_ai_insights(db: Session) -> list[str]:
     """Generate key business health insights based on financial and inventory metrics."""
     insights = []
 
-    revenue = db.query(
-        func.coalesce(func.sum(Sale.grand_total), 0.0)
-    ).scalar() or 0.0
+    try:
+        revenue = db.query(
+            func.coalesce(func.sum(Sale.grand_total), 0.0)
+        ).scalar() or 0.0
 
-    purchases = db.query(
-        func.coalesce(func.sum(Purchase.grand_total), 0.0)
-    ).scalar() or 0.0
+        purchases = db.query(
+            func.coalesce(func.sum(Purchase.grand_total), 0.0)
+        ).scalar() or 0.0
 
-    payroll = db.query(
-        func.coalesce(func.sum(Payroll.net_salary), 0.0)
-    ).scalar() or 0.0
+        payroll = db.query(
+            func.coalesce(func.sum(Payroll.net_salary), 0.0)
+        ).scalar() or 0.0
 
-    low_stock = db.query(Product).filter(
-        Product.quantity < 10
-    ).count()
+        low_stock = db.query(Product).filter(
+            Product.quantity < 10
+        ).count()
 
-    profit = revenue - purchases - payroll
+        profit = revenue - purchases - payroll
 
-    if revenue > purchases:
-        insights.append(
-            "Revenue is higher than purchase expenses."
-        )
+        if revenue > purchases:
+            insights.append("Revenue is higher than purchase expenses.")
 
-    if low_stock > 0:
-        insights.append(
-            f"{low_stock} products need immediate restocking."
-        )
+        if low_stock > 0:
+            insights.append(f"{low_stock} products need immediate restocking.")
 
-    if revenue > 0 and payroll > revenue * 0.30:
-        insights.append(
-            "Payroll expenses exceed 30% of revenue."
-        )
+        if revenue > 0 and payroll > revenue * 0.30:
+            insights.append("Payroll expenses exceed 30% of revenue.")
 
-    if profit > 0:
-        insights.append(
-            f"Estimated profit is ₹{profit:,.2f}."
-        )
-    else:
-        insights.append(
-            "Business is currently operating at a loss."
-        )
+        if profit > 0:
+            insights.append(f"Estimated profit is ₹{profit:,.2f}.")
+        else:
+            insights.append("Business is currently operating at a loss.")
+    except Exception as e:
+        logger.error(f"Error generating insights: {e}")
 
     return insights
 
@@ -64,6 +57,7 @@ def generate_ai_insights(db: Session) -> list[str]:
 def generate_ai_response(
     db: Session,
     user_message: str,
+    user = None,
 ) -> str:
     """Generate an AI assistant response using Groq with live business context."""
     if not settings.GROQ_API_KEY:
@@ -72,32 +66,34 @@ def generate_ai_response(
             "Please add GROQ_API_KEY to the environment."
         )
 
-    revenue = db.query(
-        func.coalesce(func.sum(Sale.grand_total), 0.0)
-    ).scalar() or 0.0
+    try:
+        revenue = db.query(
+            func.coalesce(func.sum(Sale.grand_total), 0.0)
+        ).scalar() or 0.0
 
-    purchases = db.query(
-        func.coalesce(func.sum(Purchase.grand_total), 0.0)
-    ).scalar() or 0.0
+        purchases = db.query(
+            func.coalesce(func.sum(Purchase.grand_total), 0.0)
+        ).scalar() or 0.0
 
-    payroll = db.query(
-        func.coalesce(func.sum(Payroll.net_salary), 0.0)
-    ).scalar() or 0.0
+        payroll = db.query(
+            func.coalesce(func.sum(Payroll.net_salary), 0.0)
+        ).scalar() or 0.0
 
-    product_count = db.query(Product).count()
+        product_count = db.query(Product).count()
 
-    low_stock_products = db.query(Product).filter(
-        Product.quantity < 10
-    ).all()
+        low_stock_products = db.query(Product).filter(
+            Product.quantity < 10
+        ).all()
 
-    low_stock_text = ", ".join(
-        f"{product.product_name} ({product.quantity})"
-        for product in low_stock_products
-    )
+        low_stock_text = ", ".join(
+            f"{product.product_name} ({product.quantity})"
+            for product in low_stock_products
+        )
 
-    profit = revenue - purchases - payroll
+        profit = revenue - purchases - payroll
+        user_role = getattr(user, "role", "Employee") if user else "Employee"
 
-    business_context = f"""
+        business_context = f"""
 You are Orvexa AI, an intelligent business assistant.
 
 You help the user understand their business using the
@@ -110,6 +106,8 @@ IMPORTANT RULES:
 - If the available data is insufficient, clearly say so.
 - Give concise, practical answers.
 - Format financial values in Indian Rupees (₹).
+
+CURRENT USER ROLE: {user_role}
 
 CURRENT BUSINESS DATA:
 
@@ -126,7 +124,6 @@ USER QUESTION:
 {user_message}
 """
 
-    try:
         client = OpenAI(
             api_key=settings.GROQ_API_KEY,
             base_url="https://api.groq.com/openai/v1",
@@ -155,7 +152,4 @@ USER QUESTION:
 
     except Exception as exc:
         logger.exception(f"GROQ ERROR: {type(exc).__name__}: {exc}")
-        return (
-            "I couldn't process your request right now. "
-            "Please try again."
-        )
+        return f"I couldn't process your request right now due to a connection issue: {str(exc)}"

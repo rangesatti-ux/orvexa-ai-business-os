@@ -31,6 +31,7 @@ from app.routes import (
     audit,
     auth,
     customer,
+    dashboard,
     department,
     employee,
     leave,
@@ -104,6 +105,7 @@ app.include_router(task.router)
 app.include_router(notification.router)
 app.include_router(audit.router)
 app.include_router(ai.router)
+app.include_router(dashboard.router)
 
 # Prometheus Monitoring Metrics
 Instrumentator().instrument(app).expose(app)

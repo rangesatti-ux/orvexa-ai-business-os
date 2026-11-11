@@ -303,6 +303,9 @@ async def get_employees(
                 detail="Invalid employee status filter.",
             )
         query = query.filter(Employee.status == status_filter.capitalize())
+    else:
+        # Hide deactivated/inactive employees by default from standard listings
+        query = query.filter(Employee.status == "Active")
 
     if sort_by == "full_name":
         query = query.order_by(Employee.full_name)

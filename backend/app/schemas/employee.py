@@ -6,6 +6,7 @@ from pydantic import (
     EmailStr,
     Field,
     ConfigDict,
+    field_validator,
 )
 
 
@@ -67,10 +68,18 @@ class EmployeeCreate(BaseModel):
         max_length=128,
         description="Initial password for the linked user login account.",
     )
-    role: Literal["HR", "Manager", "Employee"] = Field(
+    role: Literal["HR", "Manager", "Employee", "Admin"] = Field(
         default="Employee",
         description="System access role.",
     )
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def normalize_role(cls, v: str) -> str:
+        """Automatically capitalizes incoming roles to prevent 422 validation errors."""
+        if isinstance(v, str):
+            return v.capitalize()
+        return v
 
 
 class EmployeeUpdate(BaseModel):
