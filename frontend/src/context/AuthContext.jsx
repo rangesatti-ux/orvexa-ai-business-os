@@ -19,11 +19,31 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem("token") || null);
   const [loading, setLoading] = useState(true);
 
+  // Helper to normalize user payload and ensure employee_id mapping
+  const formatUserProfile = (rawProfile) => {
+    if (!rawProfile) return null;
+
+    return {
+      ...rawProfile,
+      id: rawProfile.id,
+      // Map linked employee record ID across varying backend schema formats
+      employee_id:
+        rawProfile.employee_id ||
+        rawProfile.employee?.id ||
+        rawProfile.id,
+      name: rawProfile.name || rawProfile.full_name || "User",
+      email: rawProfile.email,
+      role: rawProfile.role ? rawProfile.role.toLowerCase() : "employee",
+    };
+  };
+
   useEffect(() => {
     const initAuth = async () => {
       if (token) {
         try {
-          const profile = await authService.getProfile();
+          const rawProfile = await authService.getProfile();
+          const profile = formatUserProfile(rawProfile);
+
           setUser(profile);
           localStorage.setItem("user", JSON.stringify(profile));
         } catch (error) {
@@ -48,7 +68,8 @@ export function AuthProvider({ children }) {
     setToken(data.access_token);
 
     // Fetch real profile from backend GET /auth/me
-    const profile = await authService.getProfile();
+    const rawProfile = await authService.getProfile();
+    const profile = formatUserProfile(rawProfile);
 
     localStorage.setItem("user", JSON.stringify(profile));
     setUser(profile);

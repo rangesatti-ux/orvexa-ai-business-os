@@ -39,7 +39,8 @@ function DashboardCards() {
         setLoading(true);
         setError("");
 
-        const response = await api.get("/analytics/dashboard");
+        // Corrected endpoint to match backend /dashboard/stats route
+        const response = await api.get("/dashboard/stats");
         const data = response.data || {};
 
         setStats({

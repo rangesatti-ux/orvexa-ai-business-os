@@ -35,6 +35,15 @@ function AttendancePage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [search, setSearch] = useState("");
 
+  // Primary identifier for personal check-in / check-out actions
+  const personalEmployeeId = user?.employee_id || user?.id;
+
+  // Helper function declared BEFORE it is used in useMemo hooks
+  const getEmployeeName = (id) => {
+    const employee = employees.find((item) => Number(item.id) === Number(id));
+    return employee?.full_name || employee?.name || `Employee #${id}`;
+  };
+
   // Load employees and scope dropdown options based on role
   const loadEmployees = async () => {
     if (isAdmin) return;
@@ -45,34 +54,29 @@ function AttendancePage() {
       });
       let data = Array.isArray(response.data)
         ? response.data
-        : response.data?.employees || [];
+        : response.data?.employees || response.data?.data || [];
 
-      // Role-based filtering for dropdown selector:
-      // - HR can see Managers and Employees
-      // - Manager can see their team members
-      // - Employee only sees themselves
       if (isHr) {
         data = data.filter((emp) => {
           const r = String(emp.role || "").toLowerCase();
           return r === "manager" || r === "employee";
         });
       } else if (isManager) {
-        // Assuming manager team filtering or department match
         data = data.filter((emp) => {
           const r = String(emp.role || "").toLowerCase();
-          return r === "employee" || Number(emp.id) === Number(user?.id);
+          return r === "employee" || Number(emp.id) === Number(personalEmployeeId);
         });
       } else if (isEmployee) {
         data = data.filter(
           (emp) =>
-            Number(emp.id) === Number(user?.id) ||
+            Number(emp.id) === Number(personalEmployeeId) ||
+            Number(emp.user_id) === Number(user?.id) ||
             (emp.email && user?.email && emp.email.toLowerCase() === user.email.toLowerCase())
         );
       }
 
       setEmployees(data);
 
-      // Auto-select personal profile for employee or default view
       if (isEmployee && data.length > 0) {
         setFilterEmployeeId(data[0].id);
       }
@@ -94,21 +98,21 @@ function AttendancePage() {
       }
 
       const response = await api.get("/attendance/", { params });
-      let records = Array.isArray(response.data) ? response.data : response.data?.attendance || [];
+      let records = Array.isArray(response.data)
+        ? response.data
+        : response.data?.attendance || response.data?.items || [];
 
-      // Strict client-side filtering safeguards based on role rules
       if (isEmployee && user) {
         records = records.filter(
-          (rec) => Number(rec.employee_id) === Number(user.id)
+          (rec) =>
+            Number(rec.employee_id) === Number(personalEmployeeId) ||
+            Number(rec.employee_id) === Number(filterEmployeeId)
         );
-      } else if (isManager) {
-        // Keep only team / employee records
+      } else if (isManager || isHr) {
         const validEmpIds = employees.map((e) => Number(e.id));
-        records = records.filter((rec) => validEmpIds.includes(Number(rec.employee_id)));
-      } else if (isHr) {
-        // HR can view manager and employee attendance records
-        const validEmpIds = employees.map((e) => Number(e.id));
-        records = records.filter((rec) => validEmpIds.includes(Number(rec.employee_id)));
+        if (validEmpIds.length > 0) {
+          records = records.filter((rec) => validEmpIds.includes(Number(rec.employee_id)));
+        }
       }
 
       setAttendance(records);
@@ -129,9 +133,20 @@ function AttendancePage() {
     loadAttendance();
   }, [filterEmployeeId, selectedDate, employees]);
 
+  // Derive target employee ID for actions
+  const getActionTargetId = () => {
+    if (user?.employee_id) return user.employee_id;
+    const matched = employees.find(
+      (emp) =>
+        Number(emp.user_id) === Number(user?.id) ||
+        (emp.email && user?.email && emp.email.toLowerCase() === user.email.toLowerCase())
+    );
+    return matched ? matched.id : user?.id;
+  };
+
   // Personal Check-In
   const handleCheckIn = async () => {
-    const targetId = user?.id || filterEmployeeId;
+    const targetId = getActionTargetId();
     if (!targetId) {
       toast.warning("User profile reference missing.");
       return;
@@ -146,7 +161,11 @@ function AttendancePage() {
       await loadAttendance();
     } catch (error) {
       console.error("Check-in failed:", error);
-      toast.error(error.response?.data?.detail || "Unable to check in.");
+      toast.error(
+        error.response?.data?.detail || 
+        error.response?.data?.message || 
+        "Unable to check in."
+      );
     } finally {
       setActionLoading(false);
     }
@@ -154,7 +173,7 @@ function AttendancePage() {
 
   // Personal Check-Out
   const handleCheckOut = async () => {
-    const targetId = user?.id || filterEmployeeId;
+    const targetId = getActionTargetId();
     if (!targetId) {
       toast.warning("User profile reference missing.");
       return;
@@ -169,23 +188,33 @@ function AttendancePage() {
       await loadAttendance();
     } catch (error) {
       console.error("Check-out failed:", error);
-      toast.error(error.response?.data?.detail || "Unable to check out.");
+      toast.error(
+        error.response?.data?.detail || 
+        error.response?.data?.message || 
+        "Unable to check out."
+      );
     } finally {
       setActionLoading(false);
     }
   };
 
-  // Filter by Date and Search Query
+  // Filter by Date and Search Query (Safely placed *after* getEmployeeName definition)
   const filteredAttendance = useMemo(() => {
     return attendance.filter((record) => {
-      const matchesDate = selectedDate ? record.attendance_date === selectedDate : true;
+      const recDate = record.attendance_date || record.date || (record.created_at ? record.created_at.split("T")[0] : "");
+      const matchesDate = selectedDate ? recDate === selectedDate : true;
+      
       const query = search.trim().toLowerCase();
-      const matchesQuery = !query || 
+      const empName = getEmployeeName(record.employee_id).toLowerCase();
+      const matchesQuery =
+        !query ||
+        empName.includes(query) ||
         String(record.employee_id).toLowerCase().includes(query) ||
         String(record.status).toLowerCase().includes(query);
+
       return matchesDate && matchesQuery;
     });
-  }, [attendance, selectedDate, search]);
+  }, [attendance, selectedDate, search, employees]);
 
   // Statistics calculation for the selected day/report view
   const statistics = useMemo(() => {
@@ -199,7 +228,7 @@ function AttendancePage() {
       (r) => String(r.status).toLowerCase() === "leave"
     ).length;
     const checkedIn = filteredAttendance.filter(
-      (r) => r.check_in && !r.check_out
+      (r) => (r.check_in || r.time_in) && (!r.check_out && !r.time_out)
     ).length;
 
     return {
@@ -210,11 +239,6 @@ function AttendancePage() {
       checkedIn,
     };
   }, [filteredAttendance]);
-
-  const getEmployeeName = (id) => {
-    const employee = employees.find((item) => Number(item.id) === Number(id));
-    return employee?.full_name || employee?.name || `Employee #${id}`;
-  };
 
   if (isAdmin) {
     return (
@@ -248,7 +272,6 @@ function AttendancePage() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Day-Wise Date Picker */}
           <div className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white">
             <Calendar size={18} className="text-blue-500" />
             <input
@@ -310,7 +333,6 @@ function AttendancePage() {
             </button>
           </div>
 
-          {/* Optional filter dropdown for HR/Managers to view specific staff */}
           {!isEmployee && employees.length > 0 && (
             <div className="w-full sm:w-72">
               <select
@@ -358,7 +380,7 @@ function AttendancePage() {
       <div className="flex flex-col gap-3 sm:flex-row">
         <input
           type="text"
-          placeholder="Search by status..."
+          placeholder="Search by employee name or status..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="flex-1 rounded-lg border border-gray-300 bg-white p-3 text-gray-800 outline-none transition focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"

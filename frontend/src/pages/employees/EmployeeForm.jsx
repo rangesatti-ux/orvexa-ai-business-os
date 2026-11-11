@@ -13,52 +13,65 @@ function EmployeeForm({
   const canManageEmployees = ["admin", "hr"].includes(userRole);
 
   const [employeeId, setEmployeeId] = useState("");
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [department, setDepartment] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
   const [designation, setDesignation] = useState("");
   const [role, setRole] = useState("Employee");
   const [salary, setSalary] = useState("");
-  const [joiningDate, setJoiningDate] = useState("");
+  
+  // Automatically default to today's date (YYYY-MM-DD)
+  const [joiningDate, setJoiningDate] = useState(
+    () => new Date().toISOString().split("T")[0]
+  );
 
   useEffect(() => {
     if (!canManageEmployees) return;
 
-    if (editingEmployee) {
+    if (editingEmployee && isEditing) {
       setEmployeeId(
         editingEmployee.employee_id || editingEmployee.id || ""
       );
-      setName(
-        editingEmployee.name || editingEmployee.full_name || ""
-      );
+
+      // Split full name if present
+      const fullName = editingEmployee.name || editingEmployee.full_name || "";
+      const nameParts = fullName.trim().split(" ");
+      setFirstName(editingEmployee.first_name || nameParts[0] || "");
+      setLastName(editingEmployee.last_name || nameParts.slice(1).join(" ") || "");
+
       setEmail(editingEmployee.email || "");
       setPhone(editingEmployee.phone || "");
       setDepartment(editingEmployee.department || "");
+      setDepartmentId(editingEmployee.department_id || "");
       setDesignation(
         editingEmployee.designation || editingEmployee.position || ""
       );
       setRole(editingEmployee.role || "Employee");
       setSalary(editingEmployee.salary ?? "");
-      setJoiningDate(editingEmployee.joining_date || "");
+      setJoiningDate(editingEmployee.joining_date || new Date().toISOString().split("T")[0]);
       setPassword(""); // Password is not editable from employee form
     } else {
       resetForm();
     }
-  }, [editingEmployee, canManageEmployees]);
+  }, [editingEmployee, isEditing, canManageEmployees]);
 
   const resetForm = () => {
     setEmployeeId("");
-    setName("");
+    setFirstName("");
+    setLastName("");
     setEmail("");
     setPassword("");
     setPhone("");
     setDepartment("");
+    setDepartmentId("");
     setDesignation("");
     setRole("Employee");
     setSalary("");
-    setJoiningDate("");
+    setJoiningDate(new Date().toISOString().split("T")[0]);
   };
 
   const handleSubmit = (event) => {
@@ -69,17 +82,23 @@ function EmployeeForm({
       return;
     }
 
+    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+
     addEmployee({
-      employee_id: employeeId,
-      name,
-      email,
+      employee_id: employeeId.trim(),
+      first_name: firstName.trim(),
+      last_name: lastName.trim(),
+      name: fullName,
+      full_name: fullName,
+      email: email.trim(),
       password: isEditing ? undefined : password,
-      phone,
-      department,
-      designation,
-      role,
-      salary,
-      joining_date: joiningDate,
+      phone: phone.trim(),
+      department: department.trim(),
+      department_id: departmentId ? Number(departmentId) : undefined,
+      designation: designation.trim(),
+      role: role,
+      salary: salary !== "" ? Number(salary) : 0,
+      joining_date: joiningDate || new Date().toISOString().split("T")[0],
     });
   };
 
@@ -93,27 +112,44 @@ function EmployeeForm({
         {isEditing ? "Update Employee" : "Add Employee"}
       </h2>
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} autoComplete="off">
+        {/* Hidden dummy fields to prevent browser auto-fill mapping */}
+        <input type="text" name="fake_username_remember" style={{ display: "none" }} autoComplete="username" />
+        <input type="password" name="fake_password_remember" style={{ display: "none" }} autoComplete="current-password" />
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Employee ID */}
           <input
             type="text"
-            placeholder="Employee ID (e.g. EMP-DEV01)"
+            placeholder="Employee Code / ID (e.g. EMP-DEV01)"
             value={employeeId}
             onChange={(event) => setEmployeeId(event.target.value)}
             className="border p-3 rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
             required
             disabled={isEditing}
+            autoComplete="off"
           />
 
-          {/* Full Name */}
+          {/* First Name */}
           <input
             type="text"
-            placeholder="Full Name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
+            placeholder="First Name"
+            value={firstName}
+            onChange={(event) => setFirstName(event.target.value)}
             className="border p-3 rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
             required
+            autoComplete="off"
+          />
+
+          {/* Last Name */}
+          <input
+            type="text"
+            placeholder="Last Name"
+            value={lastName}
+            onChange={(event) => setLastName(event.target.value)}
+            className="border p-3 rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+            required
+            autoComplete="off"
           />
 
           {/* Email */}
@@ -124,6 +160,7 @@ function EmployeeForm({
             onChange={(event) => setEmail(event.target.value)}
             className="border p-3 rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
             required
+            autoComplete="off"
           />
 
           {/* Account Password (Required when creating new employee) */}
@@ -135,6 +172,7 @@ function EmployeeForm({
               onChange={(event) => setPassword(event.target.value)}
               className="border p-3 rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
               required
+              autoComplete="new-password"
             />
           )}
 
@@ -146,6 +184,7 @@ function EmployeeForm({
             onChange={(event) => setPhone(event.target.value)}
             className="border p-3 rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
             required
+            autoComplete="off"
           />
 
           {/* Department */}
@@ -156,6 +195,7 @@ function EmployeeForm({
             onChange={(event) => setDepartment(event.target.value)}
             className="border p-3 rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
             required
+            autoComplete="off"
           />
 
           {/* Designation / Position */}
@@ -166,6 +206,7 @@ function EmployeeForm({
             onChange={(event) => setDesignation(event.target.value)}
             className="border p-3 rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
             required
+            autoComplete="off"
           />
 
           {/* Role Selection */}
@@ -189,9 +230,10 @@ function EmployeeForm({
             onChange={(event) => setSalary(event.target.value)}
             className="border p-3 rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
             required
+            autoComplete="off"
           />
 
-          {/* Joining Date */}
+          {/* Joining Date (Defaults to present day automatically) */}
           <input
             type="date"
             value={joiningDate}

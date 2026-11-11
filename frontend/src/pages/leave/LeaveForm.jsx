@@ -15,6 +15,8 @@ function LeaveForm({
   const isHr = userRole === "hr";
   const isPersonalOnly = isEmployee || isHr;
 
+  const targetEmployeeId = user?.employee_id || user?.id;
+
   const [formData, setFormData] = useState({
     employee_id: "",
     leave_type: "Casual",
@@ -23,7 +25,7 @@ function LeaveForm({
     reason: "",
   });
 
-  // Auto-detect and pre-fill employee ID if the user is an employee or HR
+  // Auto-detect and pre-fill employee ID using targetEmployeeId
   useEffect(() => {
     if (editingLeave) {
       setFormData({
@@ -36,29 +38,29 @@ function LeaveForm({
     } else if (isPersonalOnly && employees.length > 0) {
       const matchingEmp = employees.find(
         (emp) =>
+          Number(emp.id) === Number(targetEmployeeId) ||
           (emp.email && user?.email && emp.email.toLowerCase() === user.email.toLowerCase()) ||
-          (emp.full_name && user?.name && emp.full_name.toLowerCase() === user.name.toLowerCase()) ||
-          Number(emp.id) === Number(user?.id)
+          (emp.full_name && user?.name && emp.full_name.toLowerCase() === user.name.toLowerCase())
       );
       setFormData((prev) => ({
         ...prev,
-        employee_id: matchingEmp ? matchingEmp.id : employees[0]?.id || "",
+        employee_id: matchingEmp ? matchingEmp.id : targetEmployeeId || employees[0]?.id || "",
       }));
     } else {
       resetForm();
     }
-  }, [editingLeave, employees, user, isPersonalOnly]);
+  }, [editingLeave, employees, user, targetEmployeeId, isPersonalOnly]);
 
   const resetForm = () => {
     let defaultEmpId = "";
     if (isPersonalOnly && employees.length > 0) {
       const matchingEmp = employees.find(
         (emp) =>
+          Number(emp.id) === Number(targetEmployeeId) ||
           (emp.email && user?.email && emp.email.toLowerCase() === user.email.toLowerCase()) ||
-          (emp.full_name && user?.name && emp.full_name.toLowerCase() === user.name.toLowerCase()) ||
-          Number(emp.id) === Number(user?.id)
+          (emp.full_name && user?.name && emp.full_name.toLowerCase() === user.name.toLowerCase())
       );
-      defaultEmpId = matchingEmp ? matchingEmp.id : employees[0]?.id || "";
+      defaultEmpId = matchingEmp ? matchingEmp.id : targetEmployeeId || employees[0]?.id || "";
     }
 
     setFormData({

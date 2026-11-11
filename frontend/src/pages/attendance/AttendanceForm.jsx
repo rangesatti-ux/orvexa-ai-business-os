@@ -11,11 +11,13 @@ function AttendanceForm({
 }) {
   const { user } = useAuth();
   const userRole = user?.role ? user.role.toLowerCase() : "employee";
-  
+
   const isAdmin = userRole === "admin";
   const isEmployee = userRole === "employee";
   const isHr = userRole === "hr";
   const isPersonalOnly = isEmployee || isHr;
+
+  const targetEmployeeId = user?.employee_id || user?.id;
 
   const [formData, setFormData] = useState({
     employee_id: "",
@@ -30,41 +32,44 @@ function AttendanceForm({
     if (editingAttendance) {
       setFormData({
         employee_id: editingAttendance.employee_id || "",
-        attendance_date: editingAttendance.attendance_date || "",
+        attendance_date: editingAttendance.attendance_date || editingAttendance.date || "",
         status: editingAttendance.status || "Present",
         remarks: editingAttendance.remarks || "",
       });
     } else if (isPersonalOnly && employees.length > 0) {
       const matchingEmp = employees.find(
         (emp) =>
+          Number(emp.id) === Number(targetEmployeeId) ||
+          Number(emp.user_id) === Number(user?.id) ||
           (emp.email && user?.email && emp.email.toLowerCase() === user.email.toLowerCase()) ||
-          (emp.full_name && user?.name && emp.full_name.toLowerCase() === user.name.toLowerCase()) ||
-          Number(emp.id) === Number(user?.id)
+          (emp.full_name && user?.name && emp.full_name.toLowerCase() === user.name.toLowerCase())
       );
       setFormData((prev) => ({
         ...prev,
-        employee_id: matchingEmp ? matchingEmp.id : employees[0]?.id || "",
+        employee_id: matchingEmp ? matchingEmp.id : targetEmployeeId || employees[0]?.id || "",
+        attendance_date: prev.attendance_date || new Date().toISOString().split("T")[0],
       }));
     } else {
       resetForm();
     }
-  }, [editingAttendance, employees, user, isPersonalOnly, isAdmin]);
+  }, [editingAttendance, employees, user, targetEmployeeId, isPersonalOnly, isAdmin]);
 
   const resetForm = () => {
     let defaultEmpId = "";
     if (isPersonalOnly && employees.length > 0) {
       const matchingEmp = employees.find(
         (emp) =>
+          Number(emp.id) === Number(targetEmployeeId) ||
+          Number(emp.user_id) === Number(user?.id) ||
           (emp.email && user?.email && emp.email.toLowerCase() === user.email.toLowerCase()) ||
-          (emp.full_name && user?.name && emp.full_name.toLowerCase() === user.name.toLowerCase()) ||
-          Number(emp.id) === Number(user?.id)
+          (emp.full_name && user?.name && emp.full_name.toLowerCase() === user.name.toLowerCase())
       );
-      defaultEmpId = matchingEmp ? matchingEmp.id : employees[0]?.id || "";
+      defaultEmpId = matchingEmp ? matchingEmp.id : targetEmployeeId || employees[0]?.id || "";
     }
 
     setFormData({
       employee_id: defaultEmpId,
-      attendance_date: "",
+      attendance_date: new Date().toISOString().split("T")[0],
       status: "Present",
       remarks: "",
     });
@@ -82,7 +87,7 @@ function AttendanceForm({
     e.preventDefault();
 
     if (isAdmin) {
-      alert("Administrators do not record attendance.");
+      alert("Administrators do not record personal attendance.");
       return;
     }
 
@@ -94,6 +99,7 @@ function AttendanceForm({
     saveAttendance({
       ...formData,
       employee_id: Number(formData.employee_id),
+      date: formData.attendance_date,
     });
 
     if (!isEditing) {

@@ -45,12 +45,15 @@ function EmployeePage() {
 
       const formattedEmployees = data.map((employee) => ({
         id: employee.id,
-        employee_id: employee.employee_id || "",
-        name: employee.full_name || employee.name || "",
-        full_name: employee.full_name || employee.name || "",
+        employee_id: employee.employee_id || employee.employee_code || "",
+        first_name: employee.first_name || "",
+        last_name: employee.last_name || "",
+        name: employee.full_name || employee.name || `${employee.first_name || ""} ${employee.last_name || ""}`.trim(),
+        full_name: employee.full_name || employee.name || `${employee.first_name || ""} ${employee.last_name || ""}`.trim(),
         email: employee.email || "",
         phone: employee.phone || "",
-        department: employee.department || "",
+        department: employee.department || employee.department_name || "",
+        department_id: employee.department_id || null,
         designation: employee.position || employee.designation || "",
         position: employee.position || employee.designation || "",
         role: employee.role || "Employee",
@@ -80,13 +83,23 @@ function EmployeePage() {
     }
 
     try {
+      const fullNameStr = (employee.name || employee.full_name || "").trim();
+      const nameParts = fullNameStr.split(" ");
+      const firstNameVal = employee.first_name || nameParts[0] || "";
+      const lastNameVal = employee.last_name || nameParts.slice(1).join(" ") || "";
+
       if (isEditing && editingEmployee) {
         const updatePayload = {
-          full_name: employee.name?.trim() || employee.full_name?.trim(),
+          first_name: firstNameVal,
+          last_name: lastNameVal,
+          full_name: fullNameStr,
+          name: fullNameStr,
           email: employee.email?.trim(),
           phone: employee.phone?.trim(),
           department: employee.department?.trim(),
+          department_id: employee.department_id ? Number(employee.department_id) : undefined,
           position: employee.designation?.trim() || employee.position?.trim(),
+          designation: employee.designation?.trim() || employee.position?.trim(),
           role: employee.role || "Employee",
           salary: Number(employee.salary) || 0,
           status: editingEmployee.status || "active",
@@ -97,15 +110,21 @@ function EmployeePage() {
       } else {
         const createPayload = {
           employee_id: employee.employee_id?.trim(),
-          full_name: employee.name?.trim() || employee.full_name?.trim(),
+          first_name: firstNameVal,
+          last_name: lastNameVal,
+          full_name: fullNameStr,
+          name: fullNameStr,
           email: employee.email?.trim(),
           password: employee.password,
           phone: employee.phone?.trim(),
           department: employee.department?.trim(),
+          department_id: employee.department_id ? Number(employee.department_id) : undefined,
           position: employee.designation?.trim() || employee.position?.trim(),
+          designation: employee.designation?.trim() || employee.position?.trim(),
           role: employee.role || "Employee",
           salary: Number(employee.salary) || 0,
-          joining_date: employee.joining_date,
+          joining_date: employee.joining_date || new Date().toISOString().split("T")[0],
+          status: "active",
         };
 
         await api.post("/employees/", createPayload);
@@ -151,6 +170,16 @@ function EmployeePage() {
       toast.success("Employee deleted successfully.");
     } catch (err) {
       console.error("Failed to delete employee:", err);
+      
+      // Gracefully handle 409 Conflict if employee is already inactive[cite: 5]
+      if (err?.response?.status === 409) {
+        toast.info("Employee is already inactive. Removing from view.");
+        setEmployees((previous) =>
+          previous.filter((employee) => employee.id !== id)
+        );
+        return;
+      }
+
       const message = err?.response?.data?.detail || "Failed to delete employee.";
       toast.error(typeof message === "string" ? message : "Unable to delete employee.");
     }
@@ -176,6 +205,8 @@ function EmployeePage() {
       [
         employee.name,
         employee.full_name,
+        employee.first_name,
+        employee.last_name,
         employee.email,
         employee.phone,
         employee.department,

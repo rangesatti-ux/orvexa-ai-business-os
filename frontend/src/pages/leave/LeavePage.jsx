@@ -50,6 +50,9 @@ function LeavePage() {
   // Admins cannot apply for leave. HR can only apply for their own leave. Employees apply for their own.
   const canApplyLeave = !isAdmin;
 
+  // Primary identifier for the authenticated user's employee record
+  const personalEmployeeId = user?.employee_id || user?.id;
+
   // Helper to find an employee's role based on ID/records
   const getEmployeeRole = (empId) => {
     const found = employees.find((e) => Number(e.id) === Number(empId));
@@ -58,13 +61,13 @@ function LeavePage() {
 
   // Strict approval permission matrix:
   // - Admin can approve anyone's leave.
-  // - HR can approve Manager and Employee leaves (cannot approve Admin).
+  // - HR can approve Manager and Employee leaves.
   // - Manager can approve Employee leaves only.
   const canApproveLeaveFor = (targetEmployeeId) => {
     if (isAdmin) return true;
-    
+
     const targetRole = getEmployeeRole(targetEmployeeId);
-    
+
     if (isHr) {
       return ["manager", "employee"].includes(targetRole);
     }
@@ -87,13 +90,14 @@ function LeavePage() {
 
       setEmployees(data);
 
-      // Pre-select employee profile if user is employee or HR (HR can only apply for own leave)
+      // Pre-select employee profile if user is employee or HR
       if ((isEmployee || isHr) && data.length > 0) {
         const matchingEmp = data.find(
           (emp) =>
+            Number(emp.id) === Number(personalEmployeeId) ||
+            Number(emp.user_id) === Number(user?.id) ||
             (emp.email && user?.email && emp.email.toLowerCase() === user.email.toLowerCase()) ||
-            (emp.full_name && user?.name && emp.full_name.toLowerCase() === user.name.toLowerCase()) ||
-            Number(emp.id) === Number(user?.id)
+            (emp.full_name && user?.name && emp.full_name.toLowerCase() === user.name.toLowerCase())
         );
         if (matchingEmp) {
           setEmployeeId(matchingEmp.id);
@@ -113,13 +117,14 @@ function LeavePage() {
     try {
       setLoadingLeaves(true);
       const response = await api.get("/leaves/");
-      let fetchedLeaves = Array.isArray(response.data) ? response.data : [];
+      let fetchedLeaves = Array.isArray(response.data) ? response.data : response.data?.leaves || [];
 
       // If user is an employee, restrict view to only their own leave requests
       if (isEmployee && user) {
         fetchedLeaves = fetchedLeaves.filter((leave) => {
           const emp = employees.find((e) => Number(e.id) === Number(leave.employee_id));
           return (
+            Number(leave.employee_id) === Number(personalEmployeeId) ||
             Number(leave.employee_id) === Number(user.id) ||
             (emp && emp.email && user.email && emp.email.toLowerCase() === user.email.toLowerCase())
           );
@@ -174,8 +179,8 @@ function LeavePage() {
     if (isHr && user) {
       const matchingEmp = employees.find(
         (emp) =>
-          (emp.email && user?.email && emp.email.toLowerCase() === user.email.toLowerCase()) ||
-          Number(emp.id) === Number(user?.id)
+          Number(emp.id) === Number(personalEmployeeId) ||
+          (emp.email && user?.email && emp.email.toLowerCase() === user.email.toLowerCase())
       );
       if (matchingEmp && Number(employeeId) !== Number(matchingEmp.id)) {
         toast.error("HR can only apply for their own leave request.");
