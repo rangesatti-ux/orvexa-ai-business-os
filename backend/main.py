@@ -68,9 +68,14 @@ app = FastAPI(
 )
 
 
-# Normalize CORS origins
+# Normalize CORS origins including your live Vercel frontend
 configured_origins = list(settings.BACKEND_CORS_ORIGINS) if hasattr(settings, "BACKEND_CORS_ORIGINS") else []
-additional_origins = ["https://orvexa-ai-business-frontend.onrender.com", "http://localhost:5173", "http://localhost:3000"]
+additional_origins = [
+    "https://orvexa-ai-business-os.vercel.app",
+    "https://orvexa-ai-business-frontend.onrender.com",
+    "http://localhost:5173",
+    "http://localhost:3000",
+]
 all_origins = set([str(o).rstrip("/") for o in configured_origins + additional_origins if o])
 
 app.add_middleware(
