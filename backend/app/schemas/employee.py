@@ -76,9 +76,17 @@ class EmployeeCreate(BaseModel):
     @field_validator("role", mode="before")
     @classmethod
     def normalize_role(cls, v: str) -> str:
-        """Automatically capitalizes incoming roles to prevent 422 validation errors."""
+        """Automatically normalizes incoming roles case-insensitively to prevent 422 validation errors."""
         if isinstance(v, str):
-            return v.capitalize()
+            v_lower = v.lower()
+            if v_lower == "hr":
+                return "HR"
+            elif v_lower == "manager":
+                return "Manager"
+            elif v_lower == "employee":
+                return "Employee"
+            elif v_lower == "admin":
+                return "Admin"
         return v
 
 
