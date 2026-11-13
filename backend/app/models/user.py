@@ -40,7 +40,7 @@ class User(Base):
         index=True,
     )
 
-    password = Column(
+    hashed_password = Column(
         String(255),
         nullable=False,
     )
@@ -90,10 +90,10 @@ class User(Base):
         self.full_name = value
 
     @property
-    def hashed_password(self) -> str:
-        """Alias property for compatibility with FastAPI security standard naming."""
-        return self.password
+    def password(self) -> str:
+        """Alias property for backward compatibility."""
+        return self.hashed_password
 
-    @hashed_password.setter
-    def hashed_password(self, value: str):
-        self.password = value
+    @password.setter
+    def password(self, value: str):
+        self.hashed_password = value
